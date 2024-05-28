@@ -15,7 +15,7 @@ collection_user_pool = database.users
 
 # Functions -----------------------------------------
 
-def add_user(user_name, user_pw):
+def add_user(user_name, user_pw) -> bool:
     try:
         collection_user_pool.insert_one({
             'user_name': user_name,
@@ -27,7 +27,7 @@ def add_user(user_name, user_pw):
         return False
     
 
-def check_user(user_name, user_pw):
+def check_user(user_name, user_pw) -> bool:
     user = collection_user_pool.find_one({
         'user_name': user_name,
         'user_password': user_pw
@@ -35,7 +35,12 @@ def check_user(user_name, user_pw):
     return user
 
 
-def delete_user(user_name):
+def delete_user(user_name) -> bool:
     collection_user_pool.delete_one({'user_name': user_name})
     return True
+
+
+def list_users() -> list:
+    users = collection_user_pool.find()
+    return users
 

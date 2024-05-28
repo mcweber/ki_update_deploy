@@ -3,7 +3,7 @@ import streamlit as st
 import ai_update_module as myapi
 import user_management as um
 
-SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search", "rag": "RAG search", "article": "Article search", "mails": "Mail search"}
+SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search", "rag": "RAG search", "fulltext": "Fulltext search"}
 
 # Functions -------------------------------------------------------------
 
@@ -52,7 +52,7 @@ def main() -> None:
         st.session_state.systemPrompt = ""
         st.session_state.results = []
         st.session_state.history = []
-        st.session_state.searchType = "vector" # llm, vector, rag, article, mails
+        st.session_state.searchType = "vector" # llm, vector, rag, fulltext
         
     if not st.session_state.userStatus:
         login_user_dialog()
@@ -60,7 +60,7 @@ def main() -> None:
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         
-        switch_searchType = st.radio(label="Choose Search Type", options=("llm", "vector", "rag", "article", "mails"), index=0)
+        switch_searchType = st.radio(label="Choose Search Type", options=("llm", "vector", "rag", "fulltext"), index=0)
         if switch_searchType != st.session_state.searchType:
             st.session_state.searchType = switch_searchType
             st.experimental_rerun()
@@ -88,7 +88,7 @@ def main() -> None:
     # Define Search & Search Results -------------------------------------------
     if st.session_state.userStatus and st.session_state.searchStatus:
 
-        if st.session_state.searchType == "article":
+        if st.session_state.searchType == "fulltext":
 
             results, count = myapi.text_search_artikel(question)
 
@@ -96,20 +96,28 @@ def main() -> None:
             st.session_state.searchStatus = False
 
             for result in results[:10]:
-                st.write(f"[{result['date']}] {result['title']}")
+                st.write(f"[{str(result['date'])[:10]}] {result['title']}")
+                st.write(result['summary'])
                 st.write(f"URL: {result['url']}")
-                # st.write(result['summary'])
                 st.divider()
+        
+        elif st.session_state.searchType == "llm":
 
-        elif st.session_state.searchType == "mails":
-
-            results, count = myapi.text_search_emails(question)
-
-            st.caption(f'Search for :"{question}". {count} emails found.')
+            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, [])
+            st.write(summary)
             st.session_state.searchStatus = False
 
-            for result in results[:10]:
-                st.write(f"[{result['date']}] {result['title']}")
+        elif st.session_state.searchType == "rag":
+
+            results = myapi.vector_search_artikel(question, 10)
+            for result in results:
+                st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
+            
+            st.divider()
+
+            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, results)
+            st.write(summary)
+            st.session_state.searchStatus = False
 
         elif st.session_state.searchType == "vector":
             
@@ -117,24 +125,10 @@ def main() -> None:
             st.session_state.searchStatus = False
 
             for result in results:
-                st.write(f"[{result['date']}] {result['title']}")
+                st.write(f"[{str(result['date'])[:10]}] {result['title']}")
+                st.write(result['summary'])
                 st.write(f"URL: {result['url']}")
-                # st.write(result['summary'])
                 st.divider()
-
-        elif st.session_state.searchType == "llm":
-
-            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, st.session_state.results)
-            st.write(summary)
-            st.session_state.searchStatus = False
-
-        elif st.session_state.searchType == "rag":
-
-            st.session_state.results = myapi.vector_search_artikel(question, 10)
-            for result in st.session_state.results:
-                st.write(f"[{result['date']}] {result['title'][:70] + '...'}")
-            
-            st.divider()
 
             summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, st.session_state.results)
             

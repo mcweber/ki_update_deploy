@@ -235,7 +235,7 @@ def write_summary(url) -> [str, str]:
 
 def generate_embeddings(max_iterations = 10) -> None:
 
-    query = {"summary_embeddings": [], "summary": {"$ne": ""}}
+    query = {"summary_embeddings": {}, "summary": {"$ne": ""}}
     cursor = collection_artikel_pool.find(query)
     count = collection_artikel_pool.count_documents(query)
     print(f"Count: {count}")
