@@ -291,7 +291,7 @@ def ask_llm(llm, question, history = [], systemPrompt = "", results = []) -> str
         input_results = []
         for result in results:
         # print(f"[{str(i['date'])[:10]}] {i['title'][:70]}")
-            input.append({"role": "user", "content": f"Datum: [date] Titel: ['title'] Summary: ['summary']"}
+            input_results.append({"role": "user", "content": f"Datum: {str(result['date'])} Titel: {result['title']} Summary: {result['summary']}"}
         
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
