@@ -287,12 +287,18 @@ def ask_llm(llm, question, history = [], systemPrompt = "", results = []) -> str
         output = response.choices[0].message.content
 
     elif llm == "groq":
+
+        input_results = []
+        for result in results:
+        # print(f"[{str(i['date'])[:10]}] {i['title'][:70]}")
+            input.append({"role": "user", "content": f"Datum: [date] Titel: ['title'] Summary: ['summary']"}
+        
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
             messages=[
                 {"role": "system", "content": systemPrompt},
                 {"role": "user", "content": question},
-                {"role": "user", "content": results},
+                {"role": "user", "content": input_results},
             ]
         )
         output = response.choices[0].message.content
