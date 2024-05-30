@@ -276,7 +276,7 @@ def create_embeddings(embeddings) -> str:
     return embeddings_list
 
 
-def ask_llm(llm, question, history = [], systemPrompt = [], results = []) -> str:
+def ask_llm(llm, question, history = [], systemPrompt = "", results = []) -> str:
 
     if llm == "openai":
         response = openaiClient.chat.completions.create(
@@ -289,7 +289,11 @@ def ask_llm(llm, question, history = [], systemPrompt = [], results = []) -> str
     elif llm == "groq":
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
-            messages=[{"role": "user", "content": question}]
+            messages=[
+                {"role": "system", "content": systemPrompt}
+                {"role": "user", "content": question},
+                {"role": "user", "content": results},
+            ]
         )
         output = response.choices[0].message.content
 
