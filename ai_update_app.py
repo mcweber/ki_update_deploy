@@ -120,13 +120,12 @@ def main() -> None:
 
             results = myapi.vector_search_artikel(question, 10)
 
-            results_str = ""
-            for result in results:
-                st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
-                results_str += f"Date: {str(result['date'])[:10]}\nTitle: {result['title']}\nSummary: {result['summary']}\n\n"
+            with st.expander("DB Search Results"):
+                results_str = ""
+                for result in results:
+                    st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
+                    results_str += f"Date: {str(result['date'])[:10]}\nTitle: {result['title']}\nSummary: {result['summary']}\n\n"
             
-            st.divider()
-
             summary = myapi.ask_llm(
                 llm=st.session_state.llmStatus,
                 temperature=0.2,
