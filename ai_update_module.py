@@ -222,10 +222,10 @@ def write_summary(url) -> [str, str]:
         history = []
 
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm("ollama_llama3", question, history, systemPrompt, results)
+        summary = ask_llm("ollama_llama3", 0.1, question, history, systemPrompt, results)
 
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm("ollama_llama3", question, history, systemPrompt, results)
+        title = ask_llm("ollama_llama3", 0.1, question, history, systemPrompt, results)
     else:
         title = "empty"
         summary = "empty"
@@ -276,49 +276,40 @@ def create_embeddings(embeddings) -> str:
     return embeddings_list
 
 
-def ask_llm(llm, question, history = [], systemPrompt = "", results = []) -> str:
+def ask_llm(llm, temperature = 0.2, question = "", history = [], systemPrompt = "", results_str = "") -> str:
+
+    # define chat string
+    input_messages = [
+                {"role": "system", "content": systemPrompt},
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": "Here is some relevant information:\n" + results_str},
+                {"role": "user", "content": "Based on the above information, " + question},
+                ]
+    
+    print(input_messages)
 
     if llm == "openai":
         response = openaiClient.chat.completions.create(
-        model="gpt-4",
-        temperature=0.2,
-        messages=[{"role": "user", "content": question}]
-        )
+            model="gpt-4",
+            temperature=temperature,
+            messages = input_messages
+            )
         output = response.choices[0].message.content
 
     elif llm == "groq":
-
-        input_results = []
-        for result in results:
-        # print(f"[{str(i['date'])[:10]}] {i['title'][:70]}")
-            input_results.append({"role": "user", "content": f"Datum: {str(result['date'])} Titel: {result['title']} Summary: {result['summary']}"}
-        
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
-            messages=[
-                {"role": "system", "content": systemPrompt},
-                {"role": "user", "content": question},
-                {"role": "user", "content": input_results},
-            ]
+            temperature=temperature,
+            messages=input_messages
         )
         output = response.choices[0].message.content
 
     elif llm == "ollama_mistral":
-        response = ollama.chat(model="mistral", messages=[
-                {
-                    'role': 'user',
-                    'content': question,
-                },
-                ])
+        response = ollama.chat(model="mistral", temperature=temperature, messages=input_messages)
         output = response['message']['content']
 
     elif llm == "ollama_llama3":
-        response = ollama.chat(model="llama3", messages=[
-                {
-                    'role': 'user',
-                    'content': question,
-                },
-                ])
+        response = ollama.chat(model="llama3", temperature=temperature, messages=input_messages)
         output = response['message']['content']
 
     else:

@@ -42,7 +42,7 @@ def add_user_dialog() -> None:
 
 def main() -> None:
     st.title("AI Update")
-    st.write("Version 0.1 30.05.2024")
+    st.write("Version 0.1.1 - 30.05.2024")
 
     # Initialize Session State -----------------------------------------
     if 'userStatus' not in st.session_state:
@@ -50,10 +50,10 @@ def main() -> None:
         st.session_state.searchStatus = False
         st.session_state.searchPref = "Artikel"
         st.session_state.llmStatus = "ollama_llama3"
-        st.session_state.systemPrompt = ""
+        st.session_state.systemPrompt = "You are a helpful assistant that provides information about the latest news in the tech sector."
         st.session_state.results = []
         st.session_state.history = []
-        st.session_state.searchType = "vector" # llm, vector, rag, fulltext
+        st.session_state.searchType = "rag" # llm, vector, rag, fulltext
         
     if not st.session_state.userStatus:
         login_user_dialog()
@@ -61,7 +61,7 @@ def main() -> None:
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         
-        switch_searchType = st.radio(label="Choose Search Type", options=("llm", "vector", "rag", "fulltext"), index=0)
+        switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
         if switch_searchType != st.session_state.searchType:
             st.session_state.searchType = switch_searchType
             st.experimental_rerun()
@@ -103,27 +103,45 @@ def main() -> None:
                 st.divider()
         
         elif st.session_state.searchType == "llm":
-
-            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, [])
+            
+            summary = myapi.ask_llm(
+                llm=st.session_state.llmStatus,
+                temperature=0.2,
+                question=question,
+                history=[],
+                systemPrompt=st.session_state.systemPrompt,
+                results_str=""
+                )
+            
             st.write(summary)
             st.session_state.searchStatus = False
 
         elif st.session_state.searchType == "rag":
 
             results = myapi.vector_search_artikel(question, 10)
+
+            results_str = ""
             for result in results:
                 st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
+                results_str += f"Date: {str(result['date'])[:10]}\nTitle: {result['title']}\nSummary: {result['summary']}\n\n"
             
             st.divider()
 
-            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, results)
+            summary = myapi.ask_llm(
+                llm=st.session_state.llmStatus,
+                temperature=0.2,
+                question=question,
+                history=[],
+                systemPrompt=st.session_state.systemPrompt,
+                results_str=results_str
+                )
+            
             st.write(summary)
             st.session_state.searchStatus = False
 
         elif st.session_state.searchType == "vector":
             
             results = myapi.vector_search_artikel(question, 10)
-            st.session_state.searchStatus = False
 
             for result in results:
                 st.write(f"[{str(result['date'])[:10]}] {result['title']}")
@@ -131,10 +149,6 @@ def main() -> None:
                 st.write(f"URL: {result['url']}")
                 st.divider()
 
-            summary = myapi.ask_llm(st.session_state.llmStatus, question, st.session_state.history, st.session_state.systemPrompt, st.session_state.results)
-            
-            st.write(summary)
-            
             st.session_state.searchStatus = False
    
    
