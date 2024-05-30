@@ -42,6 +42,7 @@ def add_user_dialog() -> None:
 
 def main() -> None:
     st.title("AI Update")
+    st.write("Version 0.1 30.05.2024")
 
     # Initialize Session State -----------------------------------------
     if 'userStatus' not in st.session_state:
