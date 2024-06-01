@@ -42,7 +42,7 @@ def add_user_dialog() -> None:
 
 def main() -> None:
     st.title("AI Update")
-    st.write("Version 0.1.1 - 30.05.2024")
+    st.write("Version 0.1.1 01.06.2024")
 
     # Initialize Session State -----------------------------------------
     if 'userStatus' not in st.session_state:
@@ -50,8 +50,8 @@ def main() -> None:
         st.session_state.searchStatus = False
         st.session_state.searchPref = "Artikel"
         st.session_state.llmStatus = "ollama_llama3"
-        st.session_state.systemPrompt = "You are a helpful assistant that provides information about the latest news in the tech sector."
-        st.session_state.results = []
+        st.session_state.systemPrompt = "You are a helpful assistant for tech news."
+        st.session_state.results = ""
         st.session_state.history = []
         st.session_state.searchType = "rag" # llm, vector, rag, fulltext
         
@@ -83,7 +83,11 @@ def main() -> None:
     # Define Search Form ----------------------------------------------
     with st.form(key="searchForm"):
         question = st.text_input(SEARCH_TYPES[st.session_state.searchType])
-        if st.form_submit_button("Search"):
+        if st.session_state.searchType in ["rag", "llm"]:
+            button_caption = "Ask a question"
+        else:
+            button_caption = "Search"
+        if st.form_submit_button(button_caption):
             st.session_state.searchStatus = True
 
     # Define Search & Search Results -------------------------------------------
@@ -103,51 +107,41 @@ def main() -> None:
                 st.divider()
         
         elif st.session_state.searchType == "llm":
-            
-            summary = myapi.ask_llm(
-                llm=st.session_state.llmStatus,
-                temperature=0.2,
-                question=question,
-                history=[],
-                systemPrompt=st.session_state.systemPrompt,
-                results_str=""
-                )
-            
+
+            summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question, 
+                                    history=st.session_state.history, 
+                                    systemPrompt=st.session_state.systemPrompt, results="")
             st.write(summary)
             st.session_state.searchStatus = False
 
         elif st.session_state.searchType == "rag":
 
             results = myapi.vector_search_artikel(question, 10)
+            
+            results_string = ""
+            for result in results:
+                st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
+                results_string += f"Date: {str(result['date'])}\nSummary: {result['summary']}\n\n"
+            
+            st.divider()
 
-            with st.expander("DB Search Results"):
-                results_str = ""
-                for result in results:
-                    st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
-                    results_str += f"Date: {str(result['date'])[:10]}\nTitle: {result['title']}\nSummary: {result['summary']}\n\n"
-            
-            summary = myapi.ask_llm(
-                llm=st.session_state.llmStatus,
-                temperature=0.2,
-                question=question,
-                history=[],
-                systemPrompt=st.session_state.systemPrompt,
-                results_str=results_str
-                )
-            
+            summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question, 
+                                    history=st.session_state.history, 
+                                    systemPrompt=st.session_state.systemPrompt, results=results_string)
             st.write(summary)
             st.session_state.searchStatus = False
 
         elif st.session_state.searchType == "vector":
             
             results = myapi.vector_search_artikel(question, 10)
+            st.session_state.searchStatus = False
 
             for result in results:
                 st.write(f"[{str(result['date'])[:10]}] {result['title']}")
                 st.write(result['summary'])
                 st.write(f"URL: {result['url']}")
                 st.divider()
-
+            
             st.session_state.searchStatus = False
    
    

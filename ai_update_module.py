@@ -36,6 +36,7 @@ GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
 groqClient = Groq(api_key=os.environ['GROQ_API_KEY'])
 
 # Load pre-trained model and tokenizer
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 model_name = "sentence-transformers/all-MiniLM-L6-v2"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name)
@@ -43,14 +44,14 @@ model = AutoModel.from_pretrained(model_name)
 
 # Define String functions ---------------------------
 
-def remove_encoded_words(text, pattern = "UNICODE") -> str:
+def remove_encoded_words(text: str, pattern: str = "UNICODE") -> str:
 
     if pattern.upper() == "UNICODE":
         pattern = r' =\?[^?]+\?[^?]+\?[^?]+\?='
     return re.sub(pattern, '', text)
 
 
-def convert_date_string(date_string) -> datetime:
+def convert_date_string(date_string: str) -> datetime:
 
     date_format = "%a, %d %b %Y %H:%M:%S %z"
     return datetime.strptime(date_string, date_format)
@@ -58,7 +59,7 @@ def convert_date_string(date_string) -> datetime:
 
 # Define Database functions ----------------------------------
 
-def fetch_emails(sender) -> list:
+def fetch_emails(sender: str) -> list:
 
     IMAP_SERVER = 'imap.web.de'
     USERNAME = 'maweber@web.de'
@@ -105,7 +106,7 @@ def fetch_emails(sender) -> list:
     return email_list
 
 
-def add_new_emails(email_list) -> [int, int]:
+def add_new_emails(email_list: list) -> [int, int]:
 
     duplicate_error_count = 0
     new_emails_count = 0
@@ -123,7 +124,7 @@ def add_new_emails(email_list) -> [int, int]:
     return new_emails_count, duplicate_error_count
 
 
-def fetch_tldr_urls(record) -> [str, list]:
+def fetch_tldr_urls(record: tuple) -> [str, list]:
 
     record_date = record.get('date')
     record_body = ''.join(record.get('body'))
@@ -149,7 +150,7 @@ def fetch_tldr_urls(record) -> [str, list]:
 # def fetch_instapaper_urls(record) -> [str, list]:
 #     return record_date, record_urls
 
-def add_urls_to_db(source, date, urls) -> [int, int]:
+def add_urls_to_db(source: str, date: datetime, urls: list = []) -> [int, int]:
 
     duplicate_error_count = 0
     new_count = 0
@@ -160,17 +161,15 @@ def add_urls_to_db(source, date, urls) -> [int, int]:
         record_dict = {"title": "", "date": date, "url": url, "summary": "", "summary_embeddings": {}, "source": source}
 
         try:
-            # insert document
             collection_artikel_pool.insert_one(record_dict)
             new_count += 1
         except DuplicateKeyError:
-            # dublicate detected
             duplicate_error_count += 1
 
     return new_count, duplicate_error_count
 
 
-def generate_abstracts(max_iterations = 20) -> None:
+def generate_abstracts(max_iterations: int = 20) -> None:
 
     cursor = collection_artikel_pool.find({'summary': ""}).limit(max_iterations)
 
@@ -197,7 +196,7 @@ def generate_abstracts(max_iterations = 20) -> None:
     cursor.close()
 
 
-def write_summary(url) -> [str, str]:
+def write_summary(url: str) -> [str, str]:
 
     # if not is_valid_url(url):
     #     print("Invalid URL.")
@@ -217,15 +216,11 @@ def write_summary(url) -> [str, str]:
         text = soup.get_text()
         text = text[:900]
 
-        systemPrompt = []
-        results = []
-        history = []
-
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm("ollama_llama3", 0.1, question, history, systemPrompt, results)
+        summary = ask_llm(llm="ollama_llama3", question=question, history=[], systemPrompt="", results="")
 
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm("ollama_llama3", 0.1, question, history, systemPrompt, results)
+        title = ask_llm(llm="ollama_llama3", question=question, history=[], systemPrompt="", results="")
     else:
         title = "empty"
         summary = "empty"
@@ -233,7 +228,7 @@ def write_summary(url) -> [str, str]:
     return title, summary
 
 
-def generate_embeddings(max_iterations = 10) -> None:
+def generate_embeddings(max_iterations: int = 10) -> None:
 
     query = {"summary_embeddings": {}, "summary": {"$ne": ""}}
     cursor = collection_artikel_pool.find(query)
@@ -264,9 +259,9 @@ def generate_embeddings(max_iterations = 10) -> None:
         collection_artikel_pool.update_one({"_id": record.get('_id')}, {"$set": {"summary_embeddings": embeddings}})
 
 
-def create_embeddings(embeddings) -> str:
+def create_embeddings(text: str) -> str:
             
-    inputs = tokenizer(embeddings, padding=True, truncation=True, return_tensors="pt")
+    inputs = tokenizer(text, padding=True, truncation=True, return_tensors="pt")
 
     with torch.no_grad():
         outputs = model(**inputs)
@@ -276,41 +271,36 @@ def create_embeddings(embeddings) -> str:
     return embeddings_list
 
 
-def ask_llm(llm, temperature = 0.2, question = "", history = [], systemPrompt = "", results_str = "") -> str:
+def ask_llm(llm: str, question: str, history: list = [], systemPrompt: str = "", results : str = "") -> str:
 
-    # define chat string
-    input_messages = [
-                {"role": "system", "content": systemPrompt},
-                {"role": "user", "content": question},
-                {"role": "assistant", "content": "Here is some relevant information:\n" + results_str},
-                {"role": "user", "content": "Based on the above information, " + question},
-                ]
-    
-    print(input_messages)
+    prompt = [
+        {"role": "system", "content": systemPrompt},
+        {"role": "assistant", "content": f"Here is some relevant information: {results}"},
+        {"role": "user", "content": f"Based on the given information, {question}"}
+        ]
 
     if llm == "openai":
         response = openaiClient.chat.completions.create(
-            model="gpt-4",
-            temperature=temperature,
-            messages = input_messages
-            )
+        model="gpt-4",
+        temperature=0.2,
+        messages=prompt
+        )
         output = response.choices[0].message.content
 
     elif llm == "groq":
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
-            temperature=temperature,
-            messages=input_messages
-        )
+            messages=prompt
+            )
         output = response.choices[0].message.content
 
-    elif llm == "ollama_mistral":
-        response = ollama.chat(model="mistral", temperature=temperature, messages=input_messages)
-        output = response['message']['content']
+    # elif llm == "ollama_mistral":
+    #     response = ollama.chat(model="mistral", messages=prompt)
+    #     output = response['message']['content']
 
-    elif llm == "ollama_llama3":
-        response = ollama.chat(model="llama3", temperature=temperature, messages=input_messages)
-        output = response['message']['content']
+    # elif llm == "ollama_llama3":
+    #     response = ollama.chat(model="llama3", messages=prompt)
+    #     output = response['message']['content']
 
     else:
         output = "Error: No valid LLM specified."
@@ -318,7 +308,7 @@ def ask_llm(llm, temperature = 0.2, question = "", history = [], systemPrompt = 
     return output
 
 
-def text_search_emails(search_text = "") -> [tuple, int]:
+def text_search_emails(search_text: str = "") -> [tuple, int]:
     
     if search_text != "":
         query = {"$text": {"$search": search_text }}
@@ -331,7 +321,7 @@ def text_search_emails(search_text = "") -> [tuple, int]:
     return cursor, count
 
 
-def text_search_artikel(search_text = "") -> [tuple, int]:
+def text_search_artikel(search_text: str = "") -> [tuple, int]:
     
     if search_text != "":
         query = {"$text": {"$search": search_text }}
@@ -347,7 +337,7 @@ def text_search_artikel(search_text = "") -> [tuple, int]:
     return cursor, count
 
 
-def vector_search_artikel(query_string, limit = 10) -> tuple:
+def vector_search_artikel(query_string: str, limit: int = 10) -> tuple:
 
     embeddings = create_embeddings(query_string)
     
@@ -375,7 +365,7 @@ def vector_search_artikel(query_string, limit = 10) -> tuple:
 
     return result
 
-def print_results(cursor) -> None:
+def print_results(cursor: tuple) -> None:
 
     if not cursor:
         print("Keine Artikel gefunden.")
