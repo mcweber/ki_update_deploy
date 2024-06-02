@@ -1,3 +1,8 @@
+# ---------------------------------------------------
+# Version: 02.06.2024
+# Author: M. Weber
+# ---------------------------------------------------
+
 import os
 import streamlit as st
 import ai_update_module as myapi
@@ -42,7 +47,7 @@ def add_user_dialog() -> None:
 
 def main() -> None:
     st.title("AI Update")
-    st.write("Version 0.1.1 01.06.2024")
+    st.write("Version 0.1.2 02.06.2024")
 
     # Initialize Session State -----------------------------------------
     if 'userStatus' not in st.session_state:

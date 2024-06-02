@@ -1,3 +1,8 @@
+# ---------------------------------------------------
+# Version: 02.06.2024
+# Author: M. Weber
+# ---------------------------------------------------
+
 from datetime import datetime
 import os
 from dotenv import load_dotenv
@@ -23,17 +28,14 @@ from transformers import AutoTokenizer, AutoModel
 
 # Init MongoDB Client
 load_dotenv()
-MONGO_URI = os.environ.get('MONGO_URI')
-mongoClient = MongoClient(MONGO_URI)
+mongoClient = MongoClient(os.environ.get('MONGO_URI_PRIVAT'))
 database = mongoClient.ki_update_db
 collection_mail_pool = database.mail_pool
 collection_artikel_pool = database.artikel_pool
 
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY_PERS')
-openaiClient = openai.OpenAI(api_key=OPENAI_API_KEY)
+openaiClient = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY_PRIVAT'))
 
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
-groqClient = Groq(api_key=os.environ['GROQ_API_KEY'])
+groqClient = Groq(api_key=os.environ['GROQ_API_KEY_PRIVAT'])
 
 # Load pre-trained model and tokenizer
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
