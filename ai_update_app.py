@@ -8,7 +8,8 @@ import streamlit as st
 import ai_update_module as myapi
 import user_management as um
 
-SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search", "rag": "RAG search", "fulltext": "Fulltext search"}
+SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search",
+                "rag": "RAG search", "fulltext": "Fulltext search"}
 
 # Functions -------------------------------------------------------------
 
@@ -53,8 +54,8 @@ def main() -> None:
     if 'userStatus' not in st.session_state:
         st.session_state.userStatus = True
         st.session_state.searchStatus = False
-        st.session_state.searchPref = "Artikel"
-        st.session_state.llmStatus = "ollama_llama3"
+        st.session_state.searchPref = "rag"
+        st.session_state.llmStatus = "openai"
         st.session_state.systemPrompt = "You are a helpful assistant for tech news."
         st.session_state.results = ""
         st.session_state.history = []
@@ -123,12 +124,11 @@ def main() -> None:
 
             results = myapi.vector_search_artikel(question, 10)
             
-            results_string = ""
-            for result in results:
-                st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
-                results_string += f"Date: {str(result['date'])}\nSummary: {result['summary']}\n\n"
-            
-            st.divider()
+            with st.expander("DB Search Results"):
+                results_string = ""
+                for result in results:
+                    st.write(f"[{str(result['date'])[:10]}] {result['title'][:70] + '...'}")
+                    results_string += f"Date: {str(result['date'])}\nSummary: {result['summary']}\n\n"
 
             summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question, 
                                     history=st.session_state.history, 
