@@ -1,11 +1,12 @@
 # ---------------------------------------------------
-# Version: 29.06.2024
+# Version: 03.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
 # 11.06.2024 Updated sort parameter in text_search_artikel function.
 # 11.06.2024 Add latest list on home screen.
 # 29.06.2024 Added current date to System Prompt
+# 03.07.2024 modified generate_abstracts function 
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -39,7 +40,6 @@ collection_mail_pool = database.mail_pool
 collection_artikel_pool = database.artikel_pool
 
 openaiClient = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY_PRIVAT'))
-
 groqClient = Groq(api_key=os.environ['GROQ_API_KEY_PRIVAT'])
 
 # Load pre-trained model and tokenizer
@@ -48,18 +48,14 @@ model_name = "sentence-transformers/all-MiniLM-L6-v2"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModel.from_pretrained(model_name)
 
-
 # Define String functions ---------------------------
 
 def remove_encoded_words(text: str, pattern: str = "UNICODE") -> str:
-
     if pattern.upper() == "UNICODE":
         pattern = r' =\?[^?]+\?[^?]+\?[^?]+\?='
     return re.sub(pattern, '', text)
 
-
 def convert_date_string(date_string: str) -> datetime:
-
     date_format = "%a, %d %b %Y %H:%M:%S %z"
     return datetime.strptime(date_string, date_format)
 
@@ -112,7 +108,6 @@ def fetch_emails(sender: str) -> list:
 
     return email_list
 
-
 def add_new_emails(email_list: list) -> [int, int]:
 
     duplicate_error_count = 0
@@ -129,7 +124,6 @@ def add_new_emails(email_list: list) -> [int, int]:
             duplicate_error_count += 1
 
     return new_emails_count, duplicate_error_count
-
 
 def fetch_tldr_urls(record: tuple) -> [str, list]:
 
@@ -175,7 +169,6 @@ def add_urls_to_db(source: str, date: datetime, urls: list = []) -> [int, int]:
 
     return new_count, duplicate_error_count
 
-
 def generate_abstracts(max_iterations: int = 20) -> None:
 
     cursor = collection_artikel_pool.find({'summary': ""}).limit(max_iterations)
@@ -202,7 +195,6 @@ def generate_abstracts(max_iterations: int = 20) -> None:
     
     cursor.close()
 
-
 def write_summary(url: str) -> [str, str]:
 
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A"}
@@ -220,10 +212,10 @@ def write_summary(url: str) -> [str, str]:
         text = text[:900]
 
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm(llm="ollama_llama3", question=question, history=[], systemPrompt="", results="")
+        summary = ask_llm(llm="openai", question=question, history=[], systemPrompt="", results="")
 
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm(llm="ollama_llama3", question=question, history=[], systemPrompt="", results="")
+        title = ask_llm(llm="openai", question=question, history=[], systemPrompt="", results="")
     else:
         title = "empty"
         summary = "empty"
@@ -231,35 +223,27 @@ def write_summary(url: str) -> [str, str]:
     return title, summary
 
 
-def generate_embeddings(max_iterations: int = 10) -> None:
-
+def generate_embeddings(max_iterations: int = 10) -> int:
     query = {"summary_embeddings": {}, "summary": {"$ne": ""}}
     cursor = collection_artikel_pool.find(query)
     count = collection_artikel_pool.count_documents(query)
     print(f"Count: {count}")
-
     iteration = 0
-
     for record in cursor:
-
         iteration += 1
         if (max_iterations > 0) and (iteration > max_iterations):
             break
-
         summary_text = record.get('summary')
         if summary_text is None:
             summary_text = "Keine Zusammenfassung vorhanden."
-            
-        print(f"[#{iteration}][{str(record.get('_id'))}] {summary_text[:50]}")
-        
-        start_time = datetime.now()
+        # print(f"[#{iteration}][{str(record.get('_id'))}] {summary_text[:50]}")
+        # start_time = datetime.now()
         embeddings = create_embeddings([summary_text])
-        duration = datetime.now() - start_time
-
-        print(f"Duration: {round(duration.total_seconds(), 2)}")
-        print("-"*50)
-
+        # duration = datetime.now() - start_time
+        # print(f"Duration: {round(duration.total_seconds(), 2)}")
+        # print("-"*50)
         collection_artikel_pool.update_one({"_id": record.get('_id')}, {"$set": {"summary_embeddings": embeddings}})
+    return iteration
 
 
 def create_embeddings(text: str) -> str:
@@ -284,7 +268,7 @@ def ask_llm(llm: str, question: str, history: list = [], systemPrompt: str = "",
 
     if llm == "openai":
         response = openaiClient.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         temperature=0.2,
         messages=prompt
         )

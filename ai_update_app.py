@@ -1,11 +1,12 @@
 # ---------------------------------------------------
-# Version: 29.06.2024
+# Version: 03.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
 # 29.06.2024 Added current date to system prompt
 # 29.06.2024 Added button "Last 7 days" to search form
 # 29.06.2024 Created function write_result()
+# 03.07.2024 added UpdateDB; generate_result() replaces write_result()
 # ---------------------------------------------------
 
 import os
@@ -15,20 +16,18 @@ import streamlit as st
 import ai_update_module as myapi
 import user_management as um
 
+# Define Constants -----------------------------------------------------
 SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search",
                 "rag": "RAG search", "fulltext": "Fulltext search"}
 TODAY = datetime.now().strftime('%d.%m.%Y')
 
-
-# Functions -------------------------------------------------------------
+# Functions ------------------------------------------------------------
 
 @st.experimental_dialog("Login User")
 def login_user_dialog() -> None:
-
     st.write(f"Status: {st.session_state.userStatus}")
     user_name = st.text_input("User")
     user_pw = st.text_input("Passwort", type="password")
-
     if st.button("Login"):
         if user_name and user_pw:
             if um.check_user(user_name, user_pw):
@@ -39,18 +38,49 @@ def login_user_dialog() -> None:
         else:
             st.error("Please fill in all fields.")
 
-
 @st.experimental_dialog("Add User")
 def add_user_dialog() -> None:
     user_name = st.text_input("User")
     user_pw = st.text_input("Passwort", type="password")
-
     if st.button("Add User"):
         if user_name and user_pw:
             um.check_user(user_name, user_pw)
             st.success("User added.")
         else:
             st.error("Please fill in all fields.")
+
+@st.experimental_dialog("UpdateDB")
+def update_db_dialog() -> None:
+    st.write(f"Anzahl Mails: {myapi.collection_mail_pool.count_documents({})} Anzahl Artikel: {myapi.collection_artikel_pool.count_documents({})}")
+    st.write(f"Anzahl Artikel ohne Summary: {myapi.collection_artikel_pool.count_documents({'summary': ''})}")
+    st.write(f"Anzahl Artikel ohne Embeddings: {myapi.collection_artikel_pool.count_documents({'summary_embeddings': {}})}")
+    if st.button("Import Mails"):
+        input_list = myapi.fetch_emails("tldr")
+        neu_count, double_count = myapi.add_new_emails(input_list)
+        st.success(f"{neu_count} Mails in Datenbank gespeichert [{double_count} Doubletten].")
+    if st.button("Extract URLs"):
+        neu_count = 0
+        double_count = 0
+        cursor, count = myapi.text_search_emails("")
+        for record in cursor:
+            if record.get("processed") == True:
+                continue
+            st.write(f"[{record.get('date')}] {record.get('title')[:50]}")
+            datum, urls = myapi.fetch_tldr_urls(record)
+            neu_count, double_count = myapi.add_urls_to_db("tldr", datum, urls)
+            myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
+        st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
+    if st.button("Generate Abstracts"):
+        count = 0
+        for i in range(10):
+            # st.write(f"Generating abstracts {i}/10")
+            myapi.generate_abstracts(100)
+            i += 1
+            count += 1
+        st.success(f"{count-10} Abstracts generated.")
+    if st.button("Create Embeddings"):
+        count = myapi.generate_embeddings(max_iterations=0)
+        st.success(f"{count} Embeddings created.")
 
 @st.experimental_dialog("Show Article")
 def show_article_dialog(article_id: str) -> None:
@@ -64,13 +94,13 @@ def show_article_dialog(article_id: str) -> None:
     time.sleep(3)
     # st.write(f"Content: {article['content']}")
 
-def write_result(result: dict, url: bool = True, summary: bool = True) -> None:
-    st.write(f"[{str(result['date'])[:10]}] {result['title'][:70]}...")
+def generate_result(result: dict, url: bool = True, summary: bool = True) -> str:
+    combined_result = f"[{str(result['date'])[:10]}] {result['title'][:70]}..."
     if summary:
-        st.write(result['summary'])
+        combined_result += f"\n\n{result['summary']}\n\n"
     if url:
-        st.write(f"URL: {result['url']}")
-    st.divider()
+        combined_result += f" [{result['url']}]"
+    return combined_result
 
 # Main -----------------------------------------------------------------
 def main() -> None:
@@ -91,13 +121,11 @@ def main() -> None:
             Your task is to provide news in the field of artificial intelligence.
             When your answer refers to a specific article, please provide the URL.
             """
-
     # Define Main Page ------------------------------------------------
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Update")
-    st.write("Version 29.06.2024 Status: POC")
-
+    st.write("Version 03.07.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
@@ -112,6 +140,8 @@ def main() -> None:
         if switch_SystemPrompt != st.session_state.systemPrompt:
             st.session_state.systemPrompt = switch_SystemPrompt
             st.experimental_rerun()
+        if st.button("UpdateDB"):
+                update_db_dialog()
         if st.button("Logout"):
             st.session_state.userStatus = False
             st.session_state.searchStatus = False
@@ -135,7 +165,7 @@ def main() -> None:
         st.caption("Latest articles:")
         results, count = myapi.text_search_artikel("")
         for result in results[:10]:
-            write_result(result=result, url=True, summary=False)
+            st.write(generate_result(result=result, url=True, summary=False))
             # st.write(f"[{str(result['date'])[:10]}] {result['title'][:70]}... ({result['url']})", unsafe_allow_html=True)
     # Define Search & Search Results -------------------------------------------
     if st.session_state.userStatus and st.session_state.searchStatus:
@@ -144,7 +174,7 @@ def main() -> None:
             results, count = myapi.text_search_artikel(question)
             st.caption(f'Search for: "{question}". {count} articles found.')
             for result in results[:10]:
-                write_result(result=result, url=True, summary=True)
+                st.write(generate_result(result=result, url=True, summary=True))
         # LLM Search -------------------------------------------
         elif st.session_state.searchType == "llm":
             summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
@@ -157,7 +187,7 @@ def main() -> None:
             with st.expander("DB Search Results"):
                 results_string = ""
                 for result in results:
-                    write_result(result=result, url=False, summary=False)
+                    st.write(generate_result(result=result, url=False, summary=False))
                     results_string += f"Date: {str(result['date'])}\nSummary: {result['summary']}\n\n"
             summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
                                     history=st.session_state.history,
@@ -168,7 +198,7 @@ def main() -> None:
             results = myapi.vector_search_artikel(question, 10)
             st.session_state.searchStatus = False
             for result in results:
-                write_result(result=result, url=True, summary=True)
+                st.write(generate_result(result=result, url=True, summary=True))
         st.session_state.searchStatus = False
 
 if __name__ == "__main__":
