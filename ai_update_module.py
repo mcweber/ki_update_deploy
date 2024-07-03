@@ -1,10 +1,16 @@
 # ---------------------------------------------------
-# Version: 02.06.2024
+# Version: 29.06.2024
 # Author: M. Weber
+# ---------------------------------------------------
+# 09.06.2024 Updated code with chatdvv module.
+# 11.06.2024 Updated sort parameter in text_search_artikel function.
+# 11.06.2024 Add latest list on home screen.
+# 29.06.2024 Added current date to System Prompt
 # ---------------------------------------------------
 
 from datetime import datetime
 import os
+from bson import ObjectId
 from dotenv import load_dotenv
 import re
 
@@ -25,8 +31,7 @@ import ollama
 import torch
 from transformers import AutoTokenizer, AutoModel
 
-
-# Init MongoDB Client
+# Init MongoDB Client and Collections ---------------------
 load_dotenv()
 mongoClient = MongoClient(os.environ.get('MONGO_URI_PRIVAT'))
 database = mongoClient.ki_update_db
@@ -200,10 +205,6 @@ def generate_abstracts(max_iterations: int = 20) -> None:
 
 def write_summary(url: str) -> [str, str]:
 
-    # if not is_valid_url(url):
-    #     print("Invalid URL.")
-    #     return "error", "error"
-
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A"}
 
     try:
@@ -296,13 +297,18 @@ def ask_llm(llm: str, question: str, history: list = [], systemPrompt: str = "",
             )
         output = response.choices[0].message.content
 
-    # elif llm == "ollama_mistral":
-    #     response = ollama.chat(model="mistral", messages=prompt)
-    #     output = response['message']['content']
+    elif llm == "ollama_mistral":
+        response = ollama.chat(
+            model="mistral", 
+            messages=[{"role": "user", "content": f"Based on the given information, {question}"}]
+            )
 
-    # elif llm == "ollama_llama3":
-    #     response = ollama.chat(model="llama3", messages=prompt)
-    #     output = response['message']['content']
+    elif llm == "ollama_llama3":
+        response = ollama.chat(
+            model="llama3", 
+            messages=[{"role": "user", "content": f"Based on the given information, {question}"}]
+            )
+        output = response['message']['content']
 
     else:
         output = "Error: No valid LLM specified."
@@ -323,7 +329,7 @@ def text_search_emails(search_text: str = "") -> [tuple, int]:
     return cursor, count
 
 
-def text_search_artikel(search_text: str = "") -> [tuple, int]:
+def text_search_artikel(search_text: str = "", sort_parameter: bool = True) -> [tuple, int]:
     
     if search_text != "":
         query = {"$text": {"$search": search_text }}
@@ -331,7 +337,7 @@ def text_search_artikel(search_text: str = "") -> [tuple, int]:
         query = {}
 
     fields = {"_id": 1, "title": 1, "date": 1, "url": 1, "summary": 1}
-    sort = [("date", -1)]
+    sort = [("date", -1)] if sort_parameter else []
 
     cursor = collection_artikel_pool.find(query, fields).sort(sort)
     count = collection_artikel_pool.count_documents(query)
@@ -367,11 +373,14 @@ def vector_search_artikel(query_string: str, limit: int = 10) -> tuple:
 
     return result
 
-def print_results(cursor: tuple) -> None:
+def get_article(id: str) -> dict:
+    return collection_artikel_pool.find_one({"_id": ObjectId(id)})
+
+def print_results(cursor: tuple, limit: int = 10) -> None:
 
     if not cursor:
         print("Keine Artikel gefunden.")
 
-    for i in cursor:
+    for i in cursor[:limit]:
         print(f"[{str(i['date'])[:10]}] {i['title'][:70]}")
         # print("-"*80)
