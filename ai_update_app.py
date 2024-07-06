@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 03.07.2024
+# Version: 06.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
@@ -7,6 +7,7 @@
 # 29.06.2024 Added button "Last 7 days" to search form
 # 29.06.2024 Created function write_result()
 # 03.07.2024 added UpdateDB; generate_result() replaces write_result()
+# 06.07.2024 switched create summary to GROQ
 # ---------------------------------------------------
 
 import os
@@ -125,7 +126,7 @@ def main() -> None:
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Update")
-    st.write("Version 03.07.2024 Status: POC")
+    st.write("Version 07.07.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
@@ -158,7 +159,7 @@ def main() -> None:
                 st.session_state.searchStatus = True
         with col2:
             if st.form_submit_button("7-day summary"):
-                question = "What is new from last week? Give a comprehensive summary of all the new articles."
+                question = "What is new from last week? Give a comprehensive summary of all the new developments."
                 st.session_state.searchStatus = True
     # Show latest articles ---------------------------------------------
     if not st.session_state.searchStatus:

@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 03.07.2024
+# Version: 06.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
@@ -7,6 +7,7 @@
 # 11.06.2024 Add latest list on home screen.
 # 29.06.2024 Added current date to System Prompt
 # 03.07.2024 modified generate_abstracts function 
+# 06.07.2024 switched create summary to GROQ
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -212,10 +213,10 @@ def write_summary(url: str) -> [str, str]:
         text = text[:900]
 
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm(llm="openai", question=question, history=[], systemPrompt="", results="")
+        summary = ask_llm(llm="groq", question=question, history=[], systemPrompt="", results="")
 
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm(llm="openai", question=question, history=[], systemPrompt="", results="")
+        title = ask_llm(llm="groq", question=question, history=[], systemPrompt="", results="")
     else:
         title = "empty"
         summary = "empty"
