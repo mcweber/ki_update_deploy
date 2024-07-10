@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 06.07.2024
+# Version: 09.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
@@ -8,6 +8,7 @@
 # 29.06.2024 Created function write_result()
 # 03.07.2024 added UpdateDB; generate_result() replaces write_result()
 # 06.07.2024 switched create summary to GROQ
+# 09.07.2024 Bug fixes, added function show_latest_articles() and button "Latest articles"
 # ---------------------------------------------------
 
 import os
@@ -103,6 +104,13 @@ def generate_result(result: dict, url: bool = True, summary: bool = True) -> str
         combined_result += f" [{result['url']}]"
     return combined_result
 
+def show_latest_articles(max_items: int = 10):
+    st.caption("Latest articles:")
+    results, count = myapi.text_search_artikel("")
+    for result in results[:max_items]:
+        st.write(generate_result(result=result, url=True, summary=False))
+        # st.write(f"[{str(result['date'])[:10]}] {result['title'][:70]}... ({result['url']})", unsafe_allow_html=True)
+
 # Main -----------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title='AI Insight', initial_sidebar_state="collapsed")
@@ -125,22 +133,22 @@ def main() -> None:
     # Define Main Page ------------------------------------------------
     if not st.session_state.userStatus:
         login_user_dialog()
-    st.title("AI Update")
-    st.write("Version 07.07.2024 Status: POC")
+    st.title("AI Insight")
+    st.caption("Version 09.07.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
         if switch_searchType != st.session_state.searchType:
             st.session_state.searchType = switch_searchType
-            st.experimental_rerun()
+            st.rerun()
         switch_llm = st.radio(label="Switch to LLM", options=("groq", "openai"), index=0)
         if switch_llm != st.session_state.llmStatus:
             st.session_state.llmStatus = switch_llm
-            st.experimental_rerun()
-        switch_SystemPrompt = st.text_area("System-Prompt", st.session_state.systemPrompt)
+            st.rerun()
+        switch_SystemPrompt = st.text_area("System-Prompt", st.session_state.systemPrompt, height=500)
         if switch_SystemPrompt != st.session_state.systemPrompt:
             st.session_state.systemPrompt = switch_SystemPrompt
-            st.experimental_rerun()
+            st.rerun()
         if st.button("UpdateDB"):
                 update_db_dialog()
         if st.button("Logout"):
@@ -148,26 +156,29 @@ def main() -> None:
             st.session_state.searchStatus = False
     # Define Search Form ----------------------------------------------
     with st.form(key="searchForm"):
-        question = st.text_input(SEARCH_TYPES[st.session_state.searchType])
+        question = st.text_area(SEARCH_TYPES[st.session_state.searchType])
         if st.session_state.searchType in ["rag", "llm"]:
             button_caption = "Ask a question"
         else:
             button_caption = "Search"
-        col1, col2 = st.columns([1, 2])
-        with col1:
+        col = st.columns([0.4, 0.3, 0.3])
+        with col[0]:
             if st.form_submit_button(button_caption):
                 st.session_state.searchStatus = True
-        with col2:
+        with col[1]:
             if st.form_submit_button("7-day summary"):
-                question = "What is new from last week? Give a comprehensive summary of all the new developments."
+                question = """
+                    What is new from last week? Give a comprehensive summary
+                    of all the new developments. Create section for each topic.
+                    At the end of the summary, provide a list of the articles used with the urls.
+                    """
                 st.session_state.searchStatus = True
+        with col[2]:
+            if st.form_submit_button("Latest articles"):
+                st.session_state.searchStatus = False
     # Show latest articles ---------------------------------------------
     if not st.session_state.searchStatus:
-        st.caption("Latest articles:")
-        results, count = myapi.text_search_artikel("")
-        for result in results[:10]:
-            st.write(generate_result(result=result, url=True, summary=False))
-            # st.write(f"[{str(result['date'])[:10]}] {result['title'][:70]}... ({result['url']})", unsafe_allow_html=True)
+        show_latest_articles(max_items=10)
     # Define Search & Search Results -------------------------------------------
     if st.session_state.userStatus and st.session_state.searchStatus:
         # Fulltext Search ---------------------------------------------------
@@ -189,7 +200,7 @@ def main() -> None:
                 results_string = ""
                 for result in results:
                     st.write(generate_result(result=result, url=False, summary=False))
-                    results_string += f"Date: {str(result['date'])}\nSummary: {result['summary']}\n\n"
+                    results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
             summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
                                     history=st.session_state.history,
                                     systemPrompt=st.session_state.systemPrompt, results=results_string)
