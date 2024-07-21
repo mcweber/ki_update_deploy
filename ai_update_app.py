@@ -134,7 +134,7 @@ def main() -> None:
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption("Version 09.07.2024 Status: POC")
+    st.caption("Version 21.07.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
