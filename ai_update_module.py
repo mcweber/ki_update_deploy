@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 06.07.2024
+# Version: 21.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
@@ -8,6 +8,7 @@
 # 29.06.2024 Added current date to System Prompt
 # 03.07.2024 modified generate_abstracts function 
 # 06.07.2024 switched create summary to GROQ
+# 21.07.2024 switched to gpt 4o mini
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -269,7 +270,7 @@ def ask_llm(llm: str, question: str, history: list = [], systemPrompt: str = "",
 
     if llm == "openai":
         response = openaiClient.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4o-mini",
         temperature=0.2,
         messages=prompt
         )
