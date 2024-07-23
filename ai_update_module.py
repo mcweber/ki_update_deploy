@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 21.07.2024
+# Version: 23.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
@@ -8,7 +8,6 @@
 # 29.06.2024 Added current date to System Prompt
 # 03.07.2024 modified generate_abstracts function 
 # 06.07.2024 switched create summary to GROQ
-# 21.07.2024 switched to gpt 4o mini
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -41,7 +40,7 @@ database = mongoClient.ki_update_db
 collection_mail_pool = database.mail_pool
 collection_artikel_pool = database.artikel_pool
 
-openaiClient = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY_PRIVAT'))
+openaiClient = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY_DVV'))
 groqClient = Groq(api_key=os.environ['GROQ_API_KEY_PRIVAT'])
 
 # Load pre-trained model and tokenizer
@@ -214,10 +213,10 @@ def write_summary(url: str) -> [str, str]:
         text = text[:900]
 
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm(llm="groq", question=question, history=[], systemPrompt="", results="")
+        summary = ask_llm(llm="openai_mini", question=question, history=[], systemPrompt="", results="")
 
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm(llm="groq", question=question, history=[], systemPrompt="", results="")
+        title = ask_llm(llm="openai_mini", question=question, history=[], systemPrompt="", results="")
     else:
         title = "empty"
         summary = "empty"
@@ -262,20 +261,27 @@ def create_embeddings(text: str) -> str:
 
 def ask_llm(llm: str, question: str, history: list = [], systemPrompt: str = "", results : str = "") -> str:
 
-    prompt = [
-        {"role": "system", "content": systemPrompt},
-        {"role": "assistant", "content": f"Here is some relevant information: {results}"},
-        {"role": "user", "content": f"Based on the given information, {question}"}
-        ]
+    prompt = [{"role": "system", "content": systemPrompt}]
+    if results != "":
+        prompt.append({"role": "assistant", "content": f"Here is some relevant information: {results}"})
+        prompt.append({"role": "user", "content": f"Based on the given information, {question}"})
+    else:
+        prompt.append({"role": "user", "content": f"{question}"})
 
     if llm == "openai":
+        response = openaiClient.chat.completions.create(
+        model="gpt-4o",
+        temperature=0.2,
+        messages=prompt
+        )
+        output = response.choices[0].message.content
+    elif llm == "openai_mini":
         response = openaiClient.chat.completions.create(
         model="gpt-4o-mini",
         temperature=0.2,
         messages=prompt
         )
         output = response.choices[0].message.content
-
     elif llm == "groq":
         response = groqClient.chat.completions.create(
             model="mixtral-8x7b-32768",
