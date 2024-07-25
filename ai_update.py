@@ -20,8 +20,7 @@ import ai_update_module as myapi
 import user_management as um
 
 # Define Constants -----------------------------------------------------
-SEARCH_TYPES = {"vector": "Vector search", "llm": "LLM search",
-                "rag": "RAG search", "fulltext": "Fulltext search"}
+SEARCH_TYPES = {"rag": "RAG search", "vector": "Vector search", "fulltext": "Fulltext search"}
 TODAY = datetime.now().strftime('%d.%m.%Y')
 
 # Functions ------------------------------------------------------------
@@ -73,17 +72,30 @@ def update_db_dialog() -> None:
             neu_count, double_count = myapi.add_urls_to_db("tldr", datum, urls)
             myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
         st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
-    if st.button("Generate Abstracts"):
-        count = 0
-        for i in range(10):
-            # st.write(f"Generating abstracts {i}/10")
-            myapi.generate_abstracts(100)
-            i += 1
-            count += 1
-        st.success(f"{count+i} Abstracts generated.")
-    if st.button("Create Embeddings"):
-        count = myapi.generate_embeddings(max_iterations=0)
-        st.success(f"{count} Embeddings created.")
+    if st.button("Generate Abstracts & embeddings"):
+        iteration = 0
+        cursor = myapi.collection_artikel_pool.find({'summary': ""})
+        if cursor:
+            for record in cursor:
+                title, summary = myapi.write_summary(record.get('url'))
+                embeddings = myapi.create_embeddings(record.get('summary'))
+                myapi.collection_artikel_pool.update_one(
+                    {"_id": record.get('_id')}, 
+                    {"$set": {
+                        "title": title,
+                        "summary": summary,
+                        "summary_embeddings": embeddings
+                        }
+                        }
+                    )
+                iteration += 1
+                st.write(f"Generating abstracts {iteration}")
+        else:
+             st.error("No articles without summary found.")
+        cursor.close()
+    # if st.button("Create Embeddings"):
+    #     count = myapi.generate_embeddings(max_iterations=0)
+    #     st.success(f"{count} Embeddings created.")
 
 @st.experimental_dialog("Show Article")
 def show_article_dialog(article_id: str) -> None:
@@ -115,13 +127,12 @@ def show_latest_articles(max_items: int = 10):
 # Main -----------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title='AI Insight', initial_sidebar_state="collapsed")
-
     # Initialize Session State -----------------------------------------
     if 'userStatus' not in st.session_state:
         st.session_state.userStatus = True
         st.session_state.searchStatus = False
         st.session_state.searchPref = "rag"
-        st.session_state.llmStatus = "openai"
+        st.session_state.llmStatus = "GPT 4o mini"
         st.session_state.results = ""
         st.session_state.history = []
         st.session_state.searchType = "rag" # llm, vector, rag, fulltext
@@ -130,14 +141,14 @@ def main() -> None:
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption("Version 23.07.2024 Status: POC")
+    st.caption("Version 25.07.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
-        switch_searchType = st.radio(label="Choose Search Type", options=("rag", "llm", "vector", "fulltext"), index=0)
+        switch_searchType = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)
         if switch_searchType != st.session_state.searchType:
             st.session_state.searchType = switch_searchType
             st.rerun()
-        switch_llm = st.radio(label="Switch to LLM", options=("groq", "openai"), index=1)
+        switch_llm = st.radio(label="Switch to LLM", options=("GPT 4o mini", "GPT 4o", "LLAMA 3.1"), index=1)
         if switch_llm != st.session_state.llmStatus:
             st.session_state.llmStatus = switch_llm
             st.rerun()
@@ -173,18 +184,30 @@ def main() -> None:
         show_latest_articles(max_items=10)
     # Define Search & Search Results -------------------------------------------
     if st.session_state.userStatus and st.session_state.searchStatus:
+        # RAG Search ---------------------------------------------------
+        if st.session_state.searchType == "rag":
+            results = myapi.vector_search_artikel(question, 10)
+            with st.expander("DB Search Results"):
+                results_string = ""
+                for result in results:
+                    st.write(generate_result(result=result, url=False, summary=False))
+                    results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
+            summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
+                                    history=st.session_state.history,
+                                    systemPrompt=st.session_state.systemPrompt, results=results_string)
+            st.write(summary)
         # Fulltext Search ---------------------------------------------------
-        if st.session_state.searchType == "fulltext":
+        elif st.session_state.searchType == "fulltext":
             results, count = myapi.text_search_artikel(question)
             st.caption(f'Search for: "{question}". {count} articles found.')
             for result in results[:10]:
                 st.write(generate_result(result=result, url=True, summary=True))
-        # LLM Search -------------------------------------------
-        elif st.session_state.searchType == "llm":
-            summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
-                                    history=st.session_state.history,
-                                    systemPrompt=st.session_state.systemPrompt, results="")
-            st.write(summary)
+        # Vector Search ---------------------------------------------------
+        elif st.session_state.searchType == "vector":
+            results = myapi.vector_search_artikel(question, 10)
+            st.session_state.searchStatus = False
+            for result in results:
+                st.write(generate_result(result=result, url=True, summary=True))
         # 7-day Summary ---------------------------------------------------
         elif st.session_state.searchType == "7day":
             st.write("7-day-summary")
@@ -202,24 +225,6 @@ def main() -> None:
                                     results=results_string)
             st.write(summary)
             st.searchPref = "rag"
-        # RAG Search ---------------------------------------------------
-        elif st.session_state.searchType == "rag":
-            results = myapi.vector_search_artikel(question, 10)
-            with st.expander("DB Search Results"):
-                results_string = ""
-                for result in results:
-                    st.write(generate_result(result=result, url=False, summary=False))
-                    results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
-            summary = myapi.ask_llm(llm=st.session_state.llmStatus, question=question,
-                                    history=st.session_state.history,
-                                    systemPrompt=st.session_state.systemPrompt, results=results_string)
-            st.write(summary)
-        # Vector Search ---------------------------------------------------
-        elif st.session_state.searchType == "vector":
-            results = myapi.vector_search_artikel(question, 10)
-            st.session_state.searchStatus = False
-            for result in results:
-                st.write(generate_result(result=result, url=True, summary=True))
         st.session_state.searchStatus = False
 
 if __name__ == "__main__":
