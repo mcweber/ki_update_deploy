@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 23.07.2024
+# Version: 25.07.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
@@ -141,7 +141,7 @@ def main() -> None:
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption("Version 25.07.2024 Status: POC")
+    st.caption("Version 20.08.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)

@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 25.07.2024
+# Version: 20.08.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
@@ -9,6 +9,7 @@
 # 03.07.2024 modified generate_abstracts function 
 # 06.07.2024 switched create summary to GROQ
 # 25.07.2024 switched all to gpt 4o mini and added llama 3.1
+# 20.08.2024 Corrected write_summary function
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -28,7 +29,7 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 
 import openai
-from groq import Groq
+# from groq import Groq
 # import ollama
 
 import torch
@@ -60,7 +61,6 @@ def remove_encoded_words(text: str, pattern: str = "UNICODE") -> str:
 def convert_date_string(date_string: str) -> datetime:
     date_format = "%a, %d %b %Y %H:%M:%S %z"
     return datetime.strptime(date_string, date_format)
-
 
 # Define Database functions ----------------------------------
 
@@ -286,4 +286,3 @@ def print_results(cursor: tuple, limit: int = 10) -> None:
         print("Keine Artikel gefunden.")
     for i in cursor[:limit]:
         print(f"[{str(i['date'])[:10]}] {i['title'][:70]}")
-        # print("-"*80)
