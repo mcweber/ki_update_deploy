@@ -171,9 +171,9 @@ def write_summary(url: str) -> [str, str]:
         text = soup.get_text()
         text = text[:900]
         question = f"Extract the abstract from the following URL: {text}. Don't start with 'Abstract:'. Don't include Title or Author. No comments, only the main text."
-        summary = ask_llm(llm="openai_mini", question=question, history=[], systemPrompt="", results="")
+        summary = ask_llm(llm="GPT 4o mini", question=question, history=[], systemPrompt="", results="")
         question = f"Generate one blog title for the following abstract: {summary}. The answer should only be one sentence long and just contain the text of the title. No comments, only the title text."
-        title = ask_llm(llm="openai_mini", question=question, history=[], systemPrompt="", results="")
+        title = ask_llm(llm="GPT 4o mini", question=question, history=[], systemPrompt="", results="")
     else:
         title = "empty"
         summary = "empty"
