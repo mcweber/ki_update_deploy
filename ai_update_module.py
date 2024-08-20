@@ -29,8 +29,8 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 
 import openai
-# from groq import Groq
-# import ollama
+from groq import Groq
+import ollama
 
 import torch
 from transformers import AutoTokenizer, AutoModel
