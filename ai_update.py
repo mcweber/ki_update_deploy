@@ -73,7 +73,7 @@ def update_db_dialog() -> None:
             neu_count, double_count = myapi.add_urls_to_db("tldr", datum, urls)
             myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
         st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
-    if st.button("Generate Abstracts & embeddings"):
+    if st.button("Generate Abstracts & Embeddings"):
         iteration = 0
         cursor = myapi.collection_artikel_pool.find({'summary': ""})
         if cursor:
