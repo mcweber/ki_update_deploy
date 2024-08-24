@@ -56,11 +56,12 @@ def update_db_dialog() -> None:
     st.write(f"Anzahl Mails: {myapi.collection_mail_pool.count_documents({})} Anzahl Artikel: {myapi.collection_artikel_pool.count_documents({})}")
     st.write(f"Anzahl Artikel ohne Summary: {myapi.collection_artikel_pool.count_documents({'summary': ''})}")
     st.write(f"Anzahl Artikel ohne Embeddings: {myapi.collection_artikel_pool.count_documents({'summary_embeddings': {}})}")
-    if st.button("Import Mails"):
+    if st.button("Import Mails & Extract URLs"):
+        # import mails ---------------------------------------------------
         input_list = myapi.fetch_emails("tldr")
         neu_count, double_count = myapi.add_new_emails(input_list)
         st.success(f"{neu_count} Mails in Datenbank gespeichert [{double_count} Doubletten].")
-    if st.button("Extract URLs"):
+        # extract URLs ---------------------------------------------------
         neu_count = 0
         double_count = 0
         cursor, count = myapi.text_search_emails("")
@@ -141,7 +142,7 @@ def main() -> None:
     if not st.session_state.userStatus:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption("Version 20.08.2024 Status: POC")
+    st.caption("Version 24.08.2024 Status: POC")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_searchType = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)
