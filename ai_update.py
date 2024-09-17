@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 15.09.2024
+# Version: 17.09.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
@@ -149,9 +149,9 @@ def show_article_dialog(article_id: str) -> None:
 
 def generate_result_str(result: dict, url: bool = True, summary: bool = True) -> str:
     combined_result = f"[{str(result['date'])[:10]}] {result['title'][:70]}..."
-    combined_result += f"\n\n(Keywords: {result['keywords'][:50]})" if result.get('keywords') else ""
+    combined_result += f"\n\(Keywords: {result['keywords'][:50]})" if result.get('keywords') else ""
     if summary:
-        combined_result += f"\n\n{result['summary']}\n\n"
+        combined_result += f"\n{result['summary']}\n"
     if url:
         combined_result += f" [{result['url']}]"
     return combined_result
@@ -161,6 +161,10 @@ def show_latest_articles(max_items: int = 10):
     results, schlagworte = myapi.text_search_artikel(search_text="*", limit=20)
     for result in results:
         st.write(generate_result_str(result=result, url=True, summary=False))
+
+def remove_recurring_spaces(input_string: str) -> str:
+    words = input_string.split()
+    return ' '.join(words)
 
 # Main -----------------------------------------------------------------
 def main() -> None:
@@ -175,7 +179,12 @@ def main() -> None:
         st.session_state.results = ""
         st.session_state.history = []
         st.session_state.search_type = "rag" # llm, vector, rag, fulltext
-        st.session_state.system_prompt = f"""You are a helpful assistant for tech news. Today is {TODAY}. Your task is to provide news in the field of artificial intelligence. When your answer refers to a specific article, please provide the URL."""
+        st.session_state.system_prompt = remove_recurring_spaces(f"""
+            You are a helpful assistant for tech news. Today is {TODAY}.
+            Your task is to provide news in the field of artificial intelligence.
+            When your answer refers to a specific article, please provide the URL.
+            If the question consists only of two words, please provide a comprehensive dossier on the given topic.
+            """)
     # Define Main Page ------------------------------------------------
     if not st.session_state.user_status:
         login_user_dialog()
@@ -237,8 +246,7 @@ def main() -> None:
             st.write(summary)
         # Fulltext Search ---------------------------------------------------
         elif st.session_state.search_type == "fulltext":
-            results, schlagworte = myapi.text_search_artikel(question)
-            # st.caption(f'Search for: "{question}". {count} articles found.')
+            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20)
             for result in results[:10]:
                 st.write(generate_result_str(result=result, url=True, summary=True))
         # Vector Search ---------------------------------------------------
@@ -251,7 +259,7 @@ def main() -> None:
         elif st.session_state.search_type == "7day":
             st.write("7-day-summary")
             question = "Give a comprehensive summary of all the new developments by grouping into sections and summarize per section."
-            results, schlagworte = myapi.text_search_artikel("*")
+            results, schlagworte = myapi.text_search_artikel(search_text="*", limit=25)
             with st.expander("Latest Articles:"):
                 results_string = ""
                 for result in results[:20]:
