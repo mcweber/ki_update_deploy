@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 11.09.2024
+# Version: 17.09.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 09.06.2024 Updated code with chatdvv module.
@@ -235,10 +235,9 @@ def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, 
             "exists": {"path": "summary"},
             }
     else:
-        schlagworte = generate_keywords(question=search_text) if gen_schlagworte else search_text
+        schlagworte = generate_keywords(llm="GPT 4o mini", text=search_text) if gen_schlagworte else search_text
         query = {
             "index": "volltext_gewichtet",
-            # "sort": {"date": -1},
             "text": {
                 "query": schlagworte, 
                 "path": {"wildcard": "*"}

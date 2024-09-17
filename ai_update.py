@@ -12,6 +12,7 @@
 # 23.07.2024 switched to GPT-4o-mini, implemented correct 7-day-summary
 # 10.09.2024 reactivated llama3.1, added ollama-status-check
 # 15.09.2024 added generate keywords
+# 17.09.2024 bug fixes
 # ---------------------------------------------------
 
 import os
@@ -166,6 +167,12 @@ def remove_recurring_spaces(input_string: str) -> str:
     words = input_string.split()
     return ' '.join(words)
 
+def count_words(input_string: str) -> int:
+    # Zerlege den String in eine Liste von Wörtern
+    words = input_string.split()
+    # Zähle die Anzahl der Wörter
+    return len(words)
+
 # Main -----------------------------------------------------------------
 def main() -> None:
     st.set_page_config(page_title='AI Update', initial_sidebar_state="expanded", layout="wide")
@@ -189,7 +196,7 @@ def main() -> None:
     if not st.session_state.user_status:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption(f"Version 15.09.2024 Status: POC/{st.session_state.llm_status}")
+    st.caption(f"Version 17.09.2024 Status: POC/{st.session_state.llm_status}")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_search_type = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)
@@ -234,9 +241,11 @@ def main() -> None:
     if st.session_state.user_status and st.session_state.search_status:
         # RAG Search ---------------------------------------------------
         if st.session_state.search_type == "rag":
-            results = myapi.vector_search_artikel(question, 10)
+            # results = myapi.vector_search_artikel(question, 10)
+            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
             with st.expander("DB Search Results"):
                 results_string = ""
+                st.write(f"Schlagworte: {schlagworte}")
                 for result in results:
                     st.write(generate_result_str(result=result, url=False, summary=False))
                     results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
@@ -246,8 +255,9 @@ def main() -> None:
             st.write(summary)
         # Fulltext Search ---------------------------------------------------
         elif st.session_state.search_type == "fulltext":
-            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20)
-            for result in results[:10]:
+            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
+            st.write(f"Schlagworte: {schlagworte}")
+            for result in results:
                 st.write(generate_result_str(result=result, url=True, summary=True))
         # Vector Search ---------------------------------------------------
         elif st.session_state.search_type == "vector":
@@ -262,7 +272,7 @@ def main() -> None:
             results, schlagworte = myapi.text_search_artikel(search_text="*", limit=25)
             with st.expander("Latest Articles:"):
                 results_string = ""
-                for result in results[:20]:
+                for result in results:
                     st.write(generate_result_str(result=result, url=True, summary=False))
                     results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
             summary = myapi.ask_llm(llm=st.session_state.llm_status,
