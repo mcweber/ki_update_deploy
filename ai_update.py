@@ -203,7 +203,7 @@ def main() -> None:
         if switch_search_type != st.session_state.search_type:
             st.session_state.search_type = switch_search_type
             st.rerun()
-        switch_llm = st.radio(label="Switch to LLM", options=("GPT 4o mini", "GPT 4o", "LLAMA 3.1"), index=1)
+        switch_llm = st.radio(label="Switch to LLM", options=("GPT 4o mini", "GPT 4o", "LLAMA 3.1"), index=0)
         if switch_llm != st.session_state.llm_status:
             st.session_state.llm_status = switch_llm
             st.rerun()
