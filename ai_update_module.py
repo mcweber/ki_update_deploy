@@ -1,15 +1,10 @@
 # ---------------------------------------------------
-# Version: 17.09.2024
+# Version: 29.09.2024
 # Author: M. Weber
 # ---------------------------------------------------
-# 09.06.2024 Updated code with chatdvv module.
-# 11.06.2024 Updated sort parameter in text_search_artikel function.
-# 11.06.2024 Add latest list on home screen.
-# 29.06.2024 Added current date to System Prompt
-# 03.07.2024 modified generate_abstracts function 
-# 06.07.2024 switched create summary to GROQ
 # 25.07.2024 switched all to gpt 4o mini and added llama 3.1
 # 20.08.2024 Corrected write_summary function
+# 29.09.2024 switched tuples to lists in all functions
 # ---------------------------------------------------
 
 from datetime import datetime
@@ -120,7 +115,7 @@ def add_new_emails(email_list: list) -> [int, int]:
             duplicate_error_count += 1
     return new_emails_count, duplicate_error_count
 
-def fetch_tldr_urls(record: tuple) -> [str, list]:
+def fetch_tldr_urls(record: list) -> [str, list]:
     record_date = record.get('date')
     record_body = ''.join(record.get('body'))
     index = record_body.find("<!DOCTYPE html>")
@@ -153,10 +148,10 @@ def generate_summary_title(llm: str, url: str) -> [str, str]:
     headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A"}
     try:
         response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.text, 'html.parser')
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
-        return "error", "error"
-    soup = BeautifulSoup(response.text, 'html.parser')
+        return "Error: {e}", "Error: {e}"
     if soup.body:
         text = soup.get_text(separator="\n", strip=True)
         text = text[:2000]
@@ -208,14 +203,14 @@ def ask_llm(llm: str, question: str, history: list = [], system_prompt: str = ""
     elif llm == "GPT 4o mini":
         response = openaiClient.chat.completions.create(model="gpt-4o-mini", temperature=0.2, messages=prompt)
         output = response.choices[0].message.content
-    elif llm == "LLAMA 3.1":
-        response = ollama.chat(model="llama3.1", messages=prompt)
+    elif llm == "LLAMA 3.X":
+        response = ollama.chat(model="llama3.2", messages=prompt)
         output = response['message']['content']
     else:
         output = "Error: No valid LLM specified."
     return output
 
-def text_search_emails(search_text: str = "") -> [tuple, int]:
+def text_search_emails(search_text: str = "") -> [list, int]:
     if search_text != "":
         query = {"$text": {"$search": search_text }}
     else:
@@ -224,23 +219,27 @@ def text_search_emails(search_text: str = "") -> [tuple, int]:
     count = collection_mail_pool.count_documents(query)
     return cursor, count
 
-def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, filter: list = [], limit: int = 10) -> [tuple, str]:
+def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, filter: list = [], limit: int = 10) -> [list, str]:
+    query_input = "No query_input."
     if search_text == "":
-        return [], ""
+        return [], query_input
     if search_text == "*":
         schlagworte = "*"
         score = 0.0
         query = {
             "index": "volltext_gewichtet",
-            "exists": {"path": "summary"},
+            "exists": {"path": "title"},
             }
     else:
-        schlagworte = generate_keywords(llm="GPT 4o mini", text=search_text) if gen_schlagworte else search_text
+        query_input = generate_keywords(llm="GPT 4o mini", text=search_text) if gen_schlagworte else search_text
+        # query_input = search_text
         query = {
             "index": "volltext_gewichtet",
             "text": {
-                "query": schlagworte, 
-                "path": {"wildcard": "*"}
+                "query": query_input,
+                # "path": {"wildcard": "*"}
+                "path": ["title", "summary", "keywords"]
+                # "path": "title"
                 }
             }
     fields = {
@@ -262,22 +261,11 @@ def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, 
         ]
     if filter:
         pipeline.insert(1, {"$match": {"quelle_id": {"$in": filter}}})
-    
+
     cursor = collection_artikel_pool.aggregate(pipeline)
-    return cursor, schlagworte
+    return list(cursor), query_input
 
-# def text_search_artikel(search_text: str = "", sort_parameter: bool = True) -> [tuple, int]:
-#     if search_text != "":
-#         query = {"$text": {"$search": search_text }}
-#     else:
-#         query = {}
-#     fields = {"_id": 1, "title": 1, "date": 1, "url": 1, "summary": 1, "keywords": 1}
-#     sort = [("date", -1)] if sort_parameter else []
-#     cursor = collection_artikel_pool.find(query, fields).sort(sort)
-#     count = collection_artikel_pool.count_documents(query)
-#     return cursor, count
-
-def vector_search_artikel(query_string: str, limit: int = 10) -> tuple:
+def vector_search_artikel(query_string: str, limit: int = 10) -> list:
     embeddings = create_embeddings(query_string)
     pipeline = [
         {"$vectorSearch": {
@@ -299,14 +287,14 @@ def vector_search_artikel(query_string: str, limit: int = 10) -> tuple:
             "score": {"$meta": "vectorSearchScore"}
             }
         }
-        ]   
+        ]
     result = collection_artikel_pool.aggregate(pipeline)
     return result
 
 def get_article(id: str) -> dict:
     return collection_artikel_pool.find_one({"_id": ObjectId(id)})
 
-def print_results(cursor: tuple, limit: int = 10) -> None:
+def print_results(cursor: list, limit: int = 10) -> None:
     if not cursor:
         print("Keine Artikel gefunden.")
     for i in cursor[:limit]:

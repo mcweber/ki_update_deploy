@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 17.09.2024
+# Version: 29.09.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 11.06.2024 Added latest articles on home screen
@@ -13,6 +13,7 @@
 # 10.09.2024 reactivated llama3.1, added ollama-status-check
 # 15.09.2024 added generate keywords
 # 17.09.2024 bug fixes
+# 28.09.2024 switch to llama 3.2
 # ---------------------------------------------------
 
 import os
@@ -72,9 +73,10 @@ def update_db_dialog() -> None:
         for record in cursor:
             if record.get("processed") == True:
                 continue
-            # st.write(f"[{record.get('date')}] {record.get('title')[:50]}")
             datum, urls = myapi.fetch_tldr_urls(record)
-            neu_count, double_count = myapi.add_urls_to_db("tldr", datum, urls)
+            count, dcount = myapi.add_urls_to_db("tldr", datum, urls)
+            neu_count += count
+            double_count += dcount
             myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
         st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
     if st.button("Generate title, abstracts, keywords & embeddings"):
@@ -107,6 +109,19 @@ def update_db_dialog() -> None:
         else:
              st.error("No articles without summary found.")
         cursor.close()
+    if st.button("Extract URLs"):
+        neu_count = 0
+        double_count = 0
+        cursor, count = myapi.text_search_emails("")
+        for record in cursor:
+            if record.get("processed") == True:
+                continue
+            datum, urls = myapi.fetch_tldr_urls(record)
+            count, dcount = myapi.add_urls_to_db("tldr", datum, urls)
+            neu_count += count
+            double_count += dcount
+            myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
+        st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
     if st.button("Create keywords"):
         iteration = 0
         print("Creating keywords")
@@ -149,19 +164,20 @@ def show_article_dialog(article_id: str) -> None:
     # st.write(f"Content: {article['content']}")
 
 def generate_result_str(result: dict, url: bool = True, summary: bool = True) -> str:
-    combined_result = f"[{str(result['date'])[:10]}] {result['title'][:70]}..."
-    combined_result += f"\n\(Keywords: {result['keywords'][:50]})" if result.get('keywords') else ""
-    if summary:
-        combined_result += f"\n{result['summary']}\n"
+    combined_result = f"\n\nDate: {str(result['date'])[:10]}\n\nTitle:{result['title']}"
     if url:
-        combined_result += f" [{result['url']}]"
+        combined_result += f"\n\nURL: {result['url']}"
+    if result['keywords']:
+        combined_result += f"\n\nKeywords: {result['keywords']}" 
+    if summary:
+        combined_result += f"\n\nSummary: {result['summary']}"
     return combined_result
 
-def show_latest_articles(max_items: int = 10):
-    st.caption("Latest articles:")
-    results, schlagworte = myapi.text_search_artikel(search_text="*", limit=20)
+def search_show_articles(query: str, max_items: int = 10):
+    results, query_input = myapi.text_search_artikel(search_text=query, limit=max_items, gen_schlagworte=True if count_words(query) > 3 else False)
     for result in results:
         st.write(generate_result_str(result=result, url=True, summary=False))
+        st.write("---------------------------------------------------")
 
 def remove_recurring_spaces(input_string: str) -> str:
     words = input_string.split()
@@ -182,7 +198,7 @@ def main() -> None:
         st.session_state.user_status = True
         st.session_state.search_status = False
         st.session_state.search_pref = "rag"
-        st.session_state.llm_status = "Llama 3.1" if myapi.ollama_active("Llama3.1") else "GPT 4o mini"
+        st.session_state.llm_status = "GPT 4o mini"
         st.session_state.results = ""
         st.session_state.history = []
         st.session_state.search_type = "rag" # llm, vector, rag, fulltext
@@ -196,14 +212,14 @@ def main() -> None:
     if not st.session_state.user_status:
         login_user_dialog()
     st.title("AI Insight")
-    st.caption(f"Version 17.09.2024 Status: POC/{st.session_state.llm_status}")
+    st.caption(f"Version 29.09.2024 Status: POC/{st.session_state.llm_status}")
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
         switch_search_type = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)
         if switch_search_type != st.session_state.search_type:
             st.session_state.search_type = switch_search_type
             st.rerun()
-        switch_llm = st.radio(label="Switch to LLM", options=("GPT 4o mini", "GPT 4o", "LLAMA 3.1"), index=0)
+        switch_llm = st.radio(label="Switch to LLM", options=("GPT 4o mini", "GPT 4o", "LLAMA 3.X"), index=0)
         if switch_llm != st.session_state.llm_status:
             st.session_state.llm_status = switch_llm
             st.rerun()
@@ -236,29 +252,31 @@ def main() -> None:
                 st.session_state.search_status = False
     # Show latest articles ---------------------------------------------
     if not st.session_state.search_status:
-        show_latest_articles(max_items=10)
+        st.caption("Latest articles:")
+        search_show_articles(query="*", max_items=10)
     # Define Search & Search Results -------------------------------------------
     if st.session_state.user_status and st.session_state.search_status:
         # RAG Search ---------------------------------------------------
         if st.session_state.search_type == "rag":
             # results = myapi.vector_search_artikel(question, 10)
-            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
+            results, query_input = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
+            results_string = ""
+            st.caption(f"Schlagworte: {query_input}")
+            for result in results:
+                results_string += generate_result_str(result=result, url=True, summary=True)
+                results_string += "\n\n-----------------------------------"
             with st.expander("DB Search Results"):
-                results_string = ""
-                st.write(f"Schlagworte: {schlagworte}")
-                for result in results:
-                    st.write(generate_result_str(result=result, url=False, summary=False))
-                    results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
-            summary = myapi.ask_llm(llm=st.session_state.llm_status, question=question,
+                st.write(results_string)
+            summary = myapi.ask_llm(llm=st.session_state.llm_status,
+                                    question=question,
                                     history=st.session_state.history,
-                                    system_prompt=st.session_state.system_prompt, results=results_string)
+                                    system_prompt=st.session_state.system_prompt,
+                                    results=results_string
+                                    )
             st.write(summary)
         # Fulltext Search ---------------------------------------------------
         elif st.session_state.search_type == "fulltext":
-            results, schlagworte = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
-            st.write(f"Schlagworte: {schlagworte}")
-            for result in results:
-                st.write(generate_result_str(result=result, url=True, summary=True))
+            search_show_articles(query=question, max_items=10)
         # Vector Search ---------------------------------------------------
         elif st.session_state.search_type == "vector":
             results = myapi.vector_search_artikel(question, 10)
@@ -274,7 +292,8 @@ def main() -> None:
                 results_string = ""
                 for result in results:
                     st.write(generate_result_str(result=result, url=True, summary=False))
-                    results_string += f"Date: {str(result['date'])}\nURL: {result['url']}\n Summary: {result['summary']}\n\n"
+                    results_string += generate_result_str(result=result, url=True, summary=True)
+                    results_string += "\n\n-----------------------------------"
             summary = myapi.ask_llm(llm=st.session_state.llm_status,
                                     question=question,
                                     history=st.session_state.history,
