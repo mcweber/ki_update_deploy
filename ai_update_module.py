@@ -1,13 +1,15 @@
 # ---------------------------------------------------
-# Version: 29.09.2024
+# Version: 06.10.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 25.07.2024 switched all to gpt 4o mini and added llama 3.1
 # 20.08.2024 Corrected write_summary function
 # 29.09.2024 switched tuples to lists in all functions
+# 30.09.2024 added last_days parameter to text_search_artikel
+# 06.10.2024 added llama prompt generation function
 # ---------------------------------------------------
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from bson import ObjectId
 from dotenv import load_dotenv
@@ -17,8 +19,6 @@ import requests
 import imaplib
 import email
 from bs4 import BeautifulSoup
-
-# from validators import url as valid_url
 
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
@@ -187,6 +187,18 @@ def create_embeddings(text: str) -> []:
     embeddings_list = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
     return embeddings_list
 
+def generate_llama_prompt(prompt: list = []) -> str:
+    prompt_string = ""
+    for text in prompt:
+        if text['role'] == "user":
+            prompt_string += f"<|start_header_id|>user<|end_header_id|>{text['content']}"
+        elif text['role'] == "assistant":
+            prompt_string += f"{text['content']}"
+        elif text['role'] == "system":
+            prompt_string += f"{text['content']}"
+    prompt_string += "<|eot_id|>"
+    return prompt_string
+
 def ask_llm(llm: str, question: str, history: list = [], system_prompt: str = "", results : str = "") -> str:
     # generate prompt -----------------------------------
     prompt = [{"role": "system", "content": system_prompt}]
@@ -204,7 +216,7 @@ def ask_llm(llm: str, question: str, history: list = [], system_prompt: str = ""
         response = openaiClient.chat.completions.create(model="gpt-4o-mini", temperature=0.2, messages=prompt)
         output = response.choices[0].message.content
     elif llm == "LLAMA 3.X":
-        response = ollama.chat(model="llama3.2", messages=prompt)
+        response = ollama.chat(model="llama3.2", messages=[{'role': 'user', 'content': generate_llama_prompt(prompt)}])
         output = response['message']['content']
     else:
         output = "Error: No valid LLM specified."
@@ -219,7 +231,7 @@ def text_search_emails(search_text: str = "") -> [list, int]:
     count = collection_mail_pool.count_documents(query)
     return cursor, count
 
-def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, filter: list = [], limit: int = 10) -> [list, str]:
+def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
     query_input = "No query_input."
     if search_text == "":
         return [], query_input
@@ -232,7 +244,6 @@ def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, 
             }
     else:
         query_input = generate_keywords(llm="GPT 4o mini", text=search_text) if gen_schlagworte else search_text
-        # query_input = search_text
         query = {
             "index": "volltext_gewichtet",
             "text": {
@@ -259,9 +270,9 @@ def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, 
         {"$sort": {"date": -1}},
         {"$limit": limit},
         ]
-    if filter:
-        pipeline.insert(1, {"$match": {"quelle_id": {"$in": filter}}})
-
+    if last_days > 0:
+        days_ago = datetime.now() - timedelta(days=last_days)
+        pipeline.insert(2, {"$match": {"date": {"$gte": days_ago}}})
     cursor = collection_artikel_pool.aggregate(pipeline)
     return list(cursor), query_input
 
