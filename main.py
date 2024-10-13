@@ -1,61 +1,23 @@
 # ---------------------------------------------------
-# Version: 06.10.2024
+VERSION = "13.10.2024"
 # Author: M. Weber
 # ---------------------------------------------------
-# 11.06.2024 Added latest articles on home screen
-# 29.06.2024 Added current date to system prompt
-# 29.06.2024 Added button "Last 7 days" to search form
-# 29.06.2024 Created function write_result()
-# 03.07.2024 added UpdateDB; generate_result_str() replaces write_result()
-# 06.07.2024 switched create summary to GROQ
-# 09.07.2024 Bug fixes, added function show_latest_articles() and button "Latest articles"
-# 23.07.2024 switched to GPT-4o-mini, implemented correct 7-day-summary
-# 10.09.2024 reactivated llama3.1, added ollama-status-check
-# 15.09.2024 added generate keywords
-# 17.09.2024 bug fixes
 # 28.09.2024 switch to llama 3.2
 # 06.10.2024 bug fixing and code cleaning
+# 08.10.2024 Export Prompt function
 # ---------------------------------------------------
 
-import os
-import time
+# import os
+# import time
 from datetime import datetime
 import streamlit as st
 import ai_update_module as myapi
-import user_management as um
 
 # Define Constants -----------------------------------------------------
-SEARCH_TYPES = {"rag": "RAG search", "vector": "Vector search", "fulltext": "Fulltext search"}
+SEARCH_TYPES = {"rag": "RAG search", "vector": "Vector search", "fulltext": "Fulltext search", "keywords": "Keyword search"}
 TODAY = datetime.now().strftime('%d.%m.%Y')
 
 # Functions ------------------------------------------------------------
-
-@st.dialog("Login User")
-def login_user_dialog() -> None:
-    st.write(f"Status: {st.session_state.user_status}")
-    user_name = st.text_input("User")
-    user_pw = st.text_input("Passwort", type="password")
-    if st.button("Login"):
-        if user_name and user_pw:
-            if um.check_user(user_name, user_pw):
-                st.session_state.user_status = 'True'
-                st.rerun()
-            else:
-                st.error("User not found.")
-        else:
-            st.error("Please fill in all fields.")
-
-@st.dialog("Add User")
-def add_user_dialog() -> None:
-    user_name = st.text_input("User")
-    user_pw = st.text_input("Passwort", type="password")
-    if st.button("Add User"):
-        if user_name and user_pw:
-            um.check_user(user_name, user_pw)
-            st.success("User added.")
-        else:
-            st.error("Please fill in all fields.")
-
 @st.dialog("UpdateDB")
 def update_db_dialog() -> None:
     st.write(f"Anzahl Mails: {myapi.collection_mail_pool.count_documents({})} Anzahl Artikel: {myapi.collection_artikel_pool.count_documents({})}")
@@ -110,47 +72,6 @@ def update_db_dialog() -> None:
         else:
              st.error("No articles without summary found.")
         cursor.close()
-    # if st.button("Extract URLs"):
-    #     neu_count = 0
-    #     double_count = 0
-    #     cursor, count = myapi.text_search_emails("")
-    #     for record in cursor:
-    #         if record.get("processed") == True:
-    #             continue
-    #         datum, urls = myapi.fetch_tldr_urls(record)
-    #         count, dcount = myapi.add_urls_to_db("tldr", datum, urls)
-    #         neu_count += count
-    #         double_count += dcount
-    #         myapi.collection_mail_pool.update_one({"_id": record.get('_id')}, {"$set": {"processed": True}})
-    #     st.success(f"{neu_count} URLs in Datenbank gespeichert [{double_count} Doubletten].")
-    # if st.button("Create keywords"):
-    #     iteration = 0
-    #     print("Creating keywords")
-    #     cursor = myapi.collection_artikel_pool.find({'keywords': ""})
-    #     if cursor:
-    #         iteration = 0
-    #         results_list = list(cursor)
-    #         for record in results_list:
-    #             id = record.get('_id')
-    #             summary = record.get('summary')
-    #             if summary == "":
-    #                 print(f"Skipping article {id} without summary.")
-    #                 continue
-    #             keywords = myapi.generate_keywords(llm=st.session_state.llm_status, text=summary)
-    #             embeddings = myapi.create_embeddings(keywords)
-    #             print(f"[{iteration}] Keywords: {keywords}")
-    #             myapi.collection_artikel_pool.update_one(
-    #                 {"_id": id}, 
-    #                 {"$set": {
-    #                     "keywords": keywords,
-    #                     "keywords_embeddings": embeddings
-    #                     }
-    #                     }
-    #                 )
-    #             iteration += 1
-    #     else:
-    #          st.error("No articles without keywords found.")
-    # cursor.close()
 
 @st.dialog("Show Article")
 def show_article_dialog(article_id: str) -> None:
@@ -161,8 +82,25 @@ def show_article_dialog(article_id: str) -> None:
     st.write(f"Summary: {article['summary']}")
     st.divider()
     st.write(f"URL: {article['url']}")
-    time.sleep(3)
+    # time.sleep(3)
     # st.write(f"Content: {article['content']}")
+
+@st.dialog("Export")
+def export_dialog() -> None:
+    exp_system_prompt = st.checkbox(f"System-Prompt [{st.session_state.system_prompt[:20]}...]", value=True)
+    exp_user_prompt = st.checkbox(f"User-Prompt  [{st.session_state.prompt[:20]}...]", value=True)
+    exp_results = st.checkbox(f"Results  [{st.session_state.results[:20]}...]", value=True)
+    exp_response = st.checkbox(f"Response  [{st.session_state.response[:20]}...]", value=True)
+    export_string = ""
+    if exp_system_prompt:
+        export_string += st.session_state.system_prompt + "\n\n"
+    if exp_user_prompt:
+        export_string += st.session_state.prompt + "\n\n"
+    if exp_results:
+        export_string += st.session_state.results + "\n\n"
+    if exp_response:
+        export_string += st.session_state.response + "\n\n"
+    st.download_button(label="Start Download", data=export_string, file_name=f"export_{datetime.now().strftime('%Y-%m-%d')}.txt")
 
 def generate_result_str(result: dict, url: bool = True, summary: bool = True) -> str:
     combined_result = f"\n\nDate: {str(result['date'])[:10]}\n\nTitle:{result['title']}"
@@ -180,14 +118,18 @@ def search_show_articles(query: str, max_items: int = 10):
         st.write(generate_result_str(result=result, url=True, summary=False))
         st.write("---------------------------------------------------")
 
+def keyword_search_show_articles(query: str, max_items: int = 10):
+    results, query_input = myapi.keyword_search_artikel(search_text=query, limit=max_items)
+    for result in results:
+        st.write(generate_result_str(result=result, url=True, summary=False))
+        st.write("---------------------------------------------------")
+
 def remove_recurring_spaces(input_string: str) -> str:
     words = input_string.split()
     return ' '.join(words)
 
 def count_words(input_string: str) -> int:
-    # Zerlege den String in eine Liste von Wörtern
     words = input_string.split()
-    # Zähle die Anzahl der Wörter
     return len(words)
 
 # Main -----------------------------------------------------------------
@@ -196,27 +138,30 @@ def main() -> None:
     # Initialize Session State -----------------------------------------
     if 'init' not in st.session_state:
         st.session_state.init = True
-        st.session_state.user_status = True
         st.session_state.search_status = False
         st.session_state.search_pref = "rag"
         st.session_state.llm_status = "GPT 4o mini"
-        st.session_state.results = ""
         st.session_state.history = []
-        st.session_state.search_type = "rag" # llm, vector, rag, fulltext
+        st.session_state.search_type = "rag"
+        # --------------------------------------------------------------
         st.session_state.system_prompt = remove_recurring_spaces(f"""
             You are a helpful assistant for tech news. Today is {TODAY}.
             Your task is to provide news in the field of artificial intelligence.
             When your answer refers to a specific article, please provide the URL.
             If the question consists only of two words, please provide a comprehensive dossier on the given topic.
             """)
+        st.session_state.prompt = ""
+        st.session_state.results = ""
+        st.session_state.response = ""
+        # --------------------------------------------------------------
+        
     # Define Main Page ------------------------------------------------
-    if not st.session_state.user_status:
-        login_user_dialog()
     st.title("AI Insight")
-    st.caption(f"Version 06.10.2024 Status: POC/{st.session_state.llm_status}")
+    st.caption(f"Version {VERSION} Status: POC/{st.session_state.llm_status}")
+
     # Define Sidebar ---------------------------------------------------
     with st.sidebar:
-        switch_search_type = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext"), index=0)
+        switch_search_type = st.radio(label="Choose Search Type", options=("rag", "vector", "fulltext", "keywords"), index=0)
         if switch_search_type != st.session_state.search_type:
             st.session_state.search_type = switch_search_type
             st.rerun()
@@ -228,11 +173,14 @@ def main() -> None:
         if switch_system_prompt != st.session_state.system_prompt:
             st.session_state.system_prompt = switch_system_prompt
             st.rerun()
+        if st.button("Export"):
+            export_dialog()
         if st.button("UpdateDB"):
-                update_db_dialog()
+            update_db_dialog()
         if st.button("Logout"):
             st.session_state.user_status = False
             st.session_state.search_status = False
+
     # Define Search Form ----------------------------------------------
     with st.form(key="searchForm"):
         question = st.text_area(SEARCH_TYPES[st.session_state.search_type])
@@ -240,26 +188,28 @@ def main() -> None:
             button_caption = "Ask a question"
         else:
             button_caption = "Search"
-        col = st.columns([0.4, 0.3, 0.3])
+        col = st.columns([0.25, 0.25, 0.25, 0.25])
         with col[0]:
             if st.form_submit_button(button_caption):
                 st.session_state.search_status = True
         with col[1]:
-            if st.form_submit_button("3-day summary"):
-                st.session_state.search_type = "3day"
+            if st.form_submit_button("5-day summary"):
+                st.session_state.search_type = "5day"
                 st.session_state.search_status = True
         with col[2]:
             if st.form_submit_button("Latest articles"):
-                st.session_state.search_status = False
-    # Show latest articles ---------------------------------------------
-    if not st.session_state.search_status:
-        st.caption("Latest articles:")
-        search_show_articles(query="*", max_items=10)
+                st.session_state.search_type = "latest"
+                st.session_state.search_status = True
+        with col[3]:
+            if st.form_submit_button("Show Keywords"):
+                st.session_state.search_type = "keyword_rank"
+                st.session_state.search_status = True
+
     # Define Search & Search Results -------------------------------------------
-    if st.session_state.user_status and st.session_state.search_status:
+    if st.session_state.search_status:
+
         # RAG Search ---------------------------------------------------
         if st.session_state.search_type == "rag":
-            # results = myapi.vector_search_artikel(question, 10)
             results, query_input = myapi.text_search_artikel(search_text=question, limit=20, gen_schlagworte=True if count_words(question) > 3 else False)
             results_string = ""
             st.caption(f"Schlagworte: {query_input}")
@@ -275,34 +225,59 @@ def main() -> None:
                                     results=results_string
                                     )
             st.write(summary)
-        # Fulltext Search ---------------------------------------------------
+            st.session_state.prompt = question
+            st.session_state.results = results_string
+            st.session_state.response = summary
+
+        # Fulltext Search -------------------------------------------------
         elif st.session_state.search_type == "fulltext":
             search_show_articles(query=question, max_items=10)
+
         # Vector Search ---------------------------------------------------
         elif st.session_state.search_type == "vector":
             results = myapi.vector_search_artikel(question, 10)
             st.session_state.search_status = False
             for result in results:
                 st.write(generate_result_str(result=result, url=True, summary=True))
+
+        # Latest Articles -------------------------------------------------
+        elif st.session_state.search_type == "latest":
+            search_show_articles(query="*", max_items=10)
+            st.session_state.search_pref = "rag"
+
+        # Keyword search --------------------------------------------------
+        elif st.session_state.search_type == "keywords":
+            keyword_search_show_articles(query=question, max_items=10)
+            st.session_state.search_pref = "rag"
+        
+        # Keywords Ranking-------------------------------------------------
+        elif st.session_state.search_type == "keyword_rank":
+            keywords_list = myapi.list_keywords()
+            for keyword in keywords_list[:100]:
+                st.write(f"{keyword['count']} {keyword['keyword']}")
+            st.session_state.search_pref = "rag"    
+
         # 3-day Summary ---------------------------------------------------
-        elif st.session_state.search_type == "3day":
-            st.write("3-day-summary")
+        elif st.session_state.search_type == "5day":
+            st.write("5-day-summary")
             question = "Give a comprehensive summary of all the new developments by grouping into sections and summarize per section."
-            results, schlagworte = myapi.text_search_artikel(search_text="*", limit=50, last_days=3)
+            results, schlagworte = myapi.text_search_artikel(search_text="*", limit=50, last_days=5)
             with st.expander("Latest Articles:"):
                 results_string = ""
                 for result in results:
                     st.write(generate_result_str(result=result, url=True, summary=False))
                     results_string += generate_result_str(result=result, url=True, summary=True)
                     results_string += "\n\n-----------------------------------"
-            # print(f"DB Results: {results_string}")
             summary = myapi.ask_llm(llm=st.session_state.llm_status,
                                     question=question,
                                     history=st.session_state.history,
                                     system_prompt=st.session_state.system_prompt,
                                     results=results_string)
             st.write(summary)
-            st.search_pref = "rag"
+        st.session_state.prompt = question
+        st.session_state.results = results_string
+        st.session_state.response = summary
+        st.session_state.search_pref = "rag"
         st.session_state.search_status = False
 
 if __name__ == "__main__":

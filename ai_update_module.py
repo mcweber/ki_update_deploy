@@ -1,5 +1,5 @@
 # ---------------------------------------------------
-# Version: 06.10.2024
+# Version: 13.10.2024
 # Author: M. Weber
 # ---------------------------------------------------
 # 25.07.2024 switched all to gpt 4o mini and added llama 3.1
@@ -7,6 +7,7 @@
 # 29.09.2024 switched tuples to lists in all functions
 # 30.09.2024 added last_days parameter to text_search_artikel
 # 06.10.2024 added llama prompt generation function
+# 13.10.2024 return keywords as list
 # ---------------------------------------------------
 
 from datetime import datetime, timedelta
@@ -164,7 +165,7 @@ def generate_summary_title(llm: str, url: str) -> [str, str]:
         summary = "empty"
     return title, summary
 
-def generate_keywords(llm: str, text: str = "", max_keywords: int = 5) -> str:
+def generate_keywords(llm: str, text: str = "", max_keywords: int = 5) -> list:
     if text == "":
         return "empty"
     system_prompt = """
@@ -177,7 +178,9 @@ def generate_keywords(llm: str, text: str = "", max_keywords: int = 5) -> str:
             The answer must only consist of the keywords,
             with the following format: "keyword1, keyword2, keyword3, ..."
             """
-    return ask_llm(llm=llm, question=task, system_prompt=system_prompt)
+    keywords_str = ask_llm(llm=llm, question=task, system_prompt=system_prompt)
+    keywords_list = [keyword.strip() for keyword in keywords_str.split(',') if keyword.strip()]
+    return keywords_list
 
 def create_embeddings(text: str) -> []:
     # inputs = tokenizer(text, padding=True, truncation=True, return_tensors="pt", clean_up_tokenization_spaces=True)
@@ -230,6 +233,96 @@ def text_search_emails(search_text: str = "") -> [list, int]:
     cursor = collection_mail_pool.find(query).sort([("date", -1)])
     count = collection_mail_pool.count_documents(query)
     return cursor, count
+
+def list_keywords() -> list:
+    pipeline = [
+    {
+    '$unwind': '$keywords'
+    },
+    {
+    '$group': {
+        '_id': '$keywords', 
+        'count': {'$sum': 1}
+        }
+    },
+    {
+    '$sort': {'count': -1}
+    },
+    {
+    '$project': {
+        '_id': 0, 
+        'keyword': '$_id', 
+        'count': 1
+        }
+    }
+    ]
+    cursor = collection_artikel_pool.aggregate(pipeline)
+    return list(cursor)
+
+def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
+    query = {
+        "index": "volltext_gewichtet",
+        "text": {
+            "query": query_input,
+            # "path": {"wildcard": "*"}
+            "path": ["title", "summary", "keywords"]
+            # "path": "title"
+            }
+        }
+    fields = {
+        "_id": 1,
+        "title": 1,
+        "date": 1,
+        "url": 1,
+        "summary": 1,
+        "source": 1,
+        "keywords": 1,
+        "score": {"$meta": "searchScore"},
+        }
+    pipeline = [
+        {"$search": query},
+        {"$project": fields},
+        {"$match": {"score": {"$gte": score}}},
+        {"$sort": {"date": -1}},
+        {"$limit": limit},
+        ]
+    if last_days > 0:
+        days_ago = datetime.now() - timedelta(days=last_days)
+        pipeline.insert(2, {"$match": {"date": {"$gte": days_ago}}})
+    cursor = collection_artikel_pool.aggregate(pipeline)
+    return list(cursor), query_input
+
+def keyword_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
+    query_input = search_text
+    query = {
+        "index": "volltext_gewichtet",
+        "text": {
+            "query": query_input,
+            # "path": ["title", "summary", "keywords"]
+            "path": "keywords"
+            }
+        }
+    fields = {
+        "_id": 1,
+        "title": 1,
+        "date": 1,
+        "url": 1,
+        "summary": 1,
+        "source": 1,
+        "keywords": 1,
+        "score": {"$meta": "searchScore"},
+        }
+    pipeline = [
+        {"$search": query},
+        {"$project": fields},
+        {"$sort": {"date": -1}},
+        {"$limit": limit},
+        ]
+    if last_days > 0:
+        days_ago = datetime.now() - timedelta(days=last_days)
+        pipeline.insert(2, {"$match": {"date": {"$gte": days_ago}}})
+    cursor = collection_artikel_pool.aggregate(pipeline)
+    return list(cursor), query_input
 
 def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
     query_input = "No query_input."
