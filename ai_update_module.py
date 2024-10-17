@@ -292,7 +292,7 @@ def text_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, 
     cursor = collection_artikel_pool.aggregate(pipeline)
     return list(cursor), query_input
 
-def keyword_search_artikel(search_text : str = "*", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
+def keyword_search_artikel(search_text : str = "", gen_schlagworte: bool = False, score: float = 0.0, limit: int = 10, last_days: int = 0) -> [list, str]:
     query_input = search_text
     query = {
         "index": "volltext_gewichtet",

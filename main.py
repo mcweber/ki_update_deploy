@@ -1,10 +1,11 @@
 # ---------------------------------------------------
-VERSION = "13.10.2024"
+VERSION = "17.10.2024"
 # Author: M. Weber
 # ---------------------------------------------------
 # 28.09.2024 switch to llama 3.2
 # 06.10.2024 bug fixing and code cleaning
 # 08.10.2024 Export Prompt function
+# 17.10.2024 bug fixes
 # ---------------------------------------------------
 
 # import os
@@ -113,12 +114,18 @@ def generate_result_str(result: dict, url: bool = True, summary: bool = True) ->
     return combined_result
 
 def search_show_articles(query: str, max_items: int = 10):
+    if query == "":
+        st.error("Please enter a text for the search.")
+        return
     results, query_input = myapi.text_search_artikel(search_text=query, limit=max_items, gen_schlagworte=True if count_words(query) > 3 else False)
     for result in results:
         st.write(generate_result_str(result=result, url=True, summary=False))
         st.write("---------------------------------------------------")
 
 def keyword_search_show_articles(query: str, max_items: int = 10):
+    if query == "":
+        st.error("Please enter a keyword for the keyword search.")
+        return
     results, query_input = myapi.keyword_search_artikel(search_text=query, limit=max_items)
     for result in results:
         st.write(generate_result_str(result=result, url=True, summary=False))
@@ -228,10 +235,14 @@ def main() -> None:
             st.session_state.prompt = question
             st.session_state.results = results_string
             st.session_state.response = summary
+            # st.session_state.search_pref = "rag"
+            st.session_state.search_status = False
 
         # Fulltext Search -------------------------------------------------
         elif st.session_state.search_type == "fulltext":
             search_show_articles(query=question, max_items=10)
+            st.session_state.search_pref = "rag"
+            st.session_state.search_status = False
 
         # Vector Search ---------------------------------------------------
         elif st.session_state.search_type == "vector":
@@ -239,23 +250,24 @@ def main() -> None:
             st.session_state.search_status = False
             for result in results:
                 st.write(generate_result_str(result=result, url=True, summary=True))
+            st.session_state.search_status = False
 
         # Latest Articles -------------------------------------------------
         elif st.session_state.search_type == "latest":
             search_show_articles(query="*", max_items=10)
-            st.session_state.search_pref = "rag"
+            st.session_state.search_status = False
 
         # Keyword search --------------------------------------------------
         elif st.session_state.search_type == "keywords":
             keyword_search_show_articles(query=question, max_items=10)
-            st.session_state.search_pref = "rag"
+            st.session_state.search_status = False
         
         # Keywords Ranking-------------------------------------------------
         elif st.session_state.search_type == "keyword_rank":
             keywords_list = myapi.list_keywords()
             for keyword in keywords_list[:100]:
                 st.write(f"{keyword['count']} {keyword['keyword']}")
-            st.session_state.search_pref = "rag"    
+            st.session_state.search_status = False
 
         # 3-day Summary ---------------------------------------------------
         elif st.session_state.search_type == "5day":
@@ -274,11 +286,10 @@ def main() -> None:
                                     system_prompt=st.session_state.system_prompt,
                                     results=results_string)
             st.write(summary)
-        st.session_state.prompt = question
-        st.session_state.results = results_string
-        st.session_state.response = summary
-        st.session_state.search_pref = "rag"
-        st.session_state.search_status = False
+            st.session_state.prompt = question
+            st.session_state.results = results_string
+            st.session_state.response = summary
+            st.session_state.search_status = False
 
 if __name__ == "__main__":
     main()
